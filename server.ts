@@ -25,6 +25,10 @@ import {
   importLinkedInProfileData,
   matchOfflineCareerAssistant
 } from './src/utils/jobnovaLogic.ts';
+import {
+  evaluateMockSessionOffline,
+  MockInterviewSession
+} from './src/utils/mockInterviewLogic.ts';
 
 dotenv.config();
 
@@ -312,6 +316,89 @@ async function startServer() {
       fixedZipUrl: '/JOBNOVA-Fixed-SpringBoot.zip',
       diagnostics: SPRING_BOOT_DIAGNOSTICS
     });
+  });
+
+  // 8. Gemini Mock Interview Evaluator endpoint
+  app.post('/api/mock-interview/evaluate', async (req, res) => {
+    const session = req.body?.session as MockInterviewSession;
+    if (!session || !Array.isArray(session.questions)) {
+      res.status(400).json({ error: 'Valid mock interview session object required.' });
+      return;
+    }
+
+    const ai = getGeminiClient();
+    if (ai) {
+      try {
+        const interviewPrompt = `Role: ${session.jobTitle} at ${session.company}
+Difficulty Level: ${session.proficiencyTier}
+Tech Stack Requirements: ${session.roleSkills.join(', ')}
+
+Here are the questions asked and the candidate's saved responses:
+${session.questions
+  .map(
+    (q, i) =>
+      `Question ${i + 1} (${q.category} · Focus: ${q.skillFocus}):\n"${q.question}"\nKey Concepts Expected: ${q.keyPoints.join(', ')}\nCandidate Response:\n"${session.answers[q.id] || '(No response provided)'}"\n`
+  )
+  .join('\n---\n')}
+
+Provide an objective engineering evaluation. Return ONLY a valid JSON object matching this schema without any markdown wraps:
+{
+  "overallScore": <number between 0 and 100>,
+  "verdict": "<Strong Hire | Hire | Borderline / Needs Review | Not Yet Ready>",
+  "readinessSummary": "<concise paragraph analyzing the candidate's overall readiness for this role>",
+  "keyStrengths": ["<strength 1>", "<strength 2>", "<strength 3>"],
+  "keyAreasForImprovement": ["<area 1>", "<area 2>", "<area 3>"],
+  "questionEvaluations": [
+    {
+      "questionId": "<matching question id>",
+      "score": <number between 0 and 100>,
+      "rating": "<Exceptional | Strong | Adequate | Needs Improvement>",
+      "feedback": "<constructive feedback on candidate's answer>",
+      "matchedConcepts": ["<concept covered>"],
+      "missingConcepts": ["<concept missed>"],
+      "suggestedImprovement": "<actionable advice to elevate answer>"
+    }
+  ]
+}`;
+
+        const geminiPromise = ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: interviewPrompt,
+          config: {
+            thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
+            systemInstruction:
+              'You are a senior engineering hiring manager conducting technical interview assessments for software engineer candidates in India. Grade objectively, constructively, and concisely. Output valid JSON only.'
+          }
+        });
+
+        const timeoutPromise = new Promise<null>((resolve) =>
+          setTimeout(() => resolve(null), 3000)
+        );
+        const response = await Promise.race([geminiPromise, timeoutPromise]);
+        const text = response?.text?.trim();
+
+        if (text) {
+          const cleanJson = text.replace(/^```json\s*/i, '').replace(/\s*```$/i, '').trim();
+          const parsed = JSON.parse(cleanJson);
+          if (typeof parsed.overallScore === 'number' && Array.isArray(parsed.questionEvaluations)) {
+            res.json({
+              evaluation: {
+                ...parsed,
+                evaluatedAt: new Date().toISOString(),
+                evaluatorSource: 'gemini'
+              }
+            });
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn('Gemini API mock interview evaluation fallback:', err instanceof Error ? err.message : err);
+      }
+    }
+
+    // Seamless offline fallback
+    const offlineEvaluation = evaluateMockSessionOffline(session);
+    res.json({ evaluation: offlineEvaluation });
   });
 
   // Mount Vite in dev or static dist in production
