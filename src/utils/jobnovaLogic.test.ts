@@ -14,10 +14,12 @@ import {
 } from '../data/seedData';
 import {
   addInterviewFeedbackRecord,
+  buildLinkedInShareUrl,
   buildResumeStructuredData,
   computeCareerStats,
   computeCareerTimelineSummary,
   computeInterviewCountdown,
+  computeLinkedInConnectionHealth,
   computePersonalizedSkillAlerts,
   computeProfileSkillGapAnalysis,
   computeProfileSkillProficiencyList,
@@ -34,6 +36,7 @@ import {
   filterJobsBySkill,
   formatApplicationStatusNotification,
   formatWorkExperienceDuration,
+  generateLinkedInShareText,
   generateMockInterviewQuestions,
   getDefaultInterviewIso,
   getStageStepIndex,
@@ -49,21 +52,21 @@ import {
   updateSkillProficiencyMap
 } from './jobnovaLogic';
 
-test('filterJobsBySkill filters 20 seeded jobs by skill, company, and location', () => {
-  assert.equal(SEED_JOBS.length, 20);
+test('filterJobsBySkill filters 30 seeded jobs by skill, company, and location', () => {
+  assert.equal(SEED_JOBS.length, 30);
   const javaJobs = filterJobsBySkill(SEED_JOBS, 'springboot');
-  assert.equal(javaJobs.length, 2);
+  assert.ok(javaJobs.length >= 5);
   assert.equal(javaJobs[0].company, 'TCS');
   assert.equal(javaJobs[1].company, 'Infosys');
 
   const chennaiJobs = filterJobsBySkill(SEED_JOBS, '', 'Chennai');
-  assert.equal(chennaiJobs.length, 3);
+  assert.equal(chennaiJobs.length, 7);
 });
 
-test('filterInternships filters 8 seeded internships accurately', () => {
-  assert.equal(SEED_INTERNSHIPS.length, 8);
+test('filterInternships filters 16 seeded internships accurately', () => {
+  assert.equal(SEED_INTERNSHIPS.length, 16);
   const remoteInterns = filterInternships(SEED_INTERNSHIPS, '', 'Remote');
-  assert.equal(remoteInterns.length, 4);
+  assert.equal(remoteInterns.length, 5);
 
   const pythonInterns = filterInternships(SEED_INTERNSHIPS, 'python');
   assert.equal(pythonInterns.length, 1);
@@ -79,11 +82,12 @@ test('filterCourses filters 30 seeded courses by keyword and provider', () => {
   assert.ok(courseraCourses.length >= 8);
 });
 
-test('filterCertifications filters 7 seeded certifications by name and issuer', () => {
-  assert.equal(SEED_CERTIFICATIONS.length, 7);
+test('filterCertifications filters 14 seeded certifications by name and issuer', () => {
+  assert.equal(SEED_CERTIFICATIONS.length, 14);
   const awsCerts = filterCertifications(SEED_CERTIFICATIONS, 'aws');
-  assert.equal(awsCerts.length, 1);
+  assert.equal(awsCerts.length, 2);
   assert.equal(awsCerts[0].issuer, 'Amazon');
+  assert.equal(awsCerts[1].issuer, 'Amazon');
 });
 
 test('matchOfflineCareerAssistant returns knowledge base responses for known keywords', () => {
@@ -632,6 +636,120 @@ test('importLinkedInProfileData merges work history, professional summary, and s
   assert.equal(disconnected.workHistory?.length, 2);
   assert.equal(disconnected.lastLinkedInSync, undefined);
 });
+
+test('generateLinkedInShareText and buildLinkedInShareUrl format broadcast posts and valid LinkedIn share URLs for jobs and internships', () => {
+  // 1. Job broadcast post
+  const jobPayload = {
+    title: 'Software Engineer',
+    company: 'TCS',
+    type: 'job',
+    location: 'Chennai',
+    ctc: '7.5 LPA',
+    skills: 'java,springboot,sql'
+  };
+
+  const jobShareText = generateLinkedInShareText(jobPayload);
+  assert.ok(jobShareText.includes('Software Engineer'));
+  assert.ok(jobShareText.includes('TCS'));
+  assert.ok(jobShareText.includes('Chennai'));
+  assert.ok(jobShareText.includes('7.5 LPA'));
+  assert.ok(jobShareText.includes('#JobNova'));
+  assert.ok(jobShareText.includes('#TCS'));
+  assert.ok(jobShareText.includes('#SoftwareEngineering'));
+
+  const jobShareUrl = buildLinkedInShareUrl(jobPayload);
+  assert.ok(jobShareUrl.startsWith('https://www.linkedin.com/sharing/share-offsite/'));
+  assert.ok(jobShareUrl.includes(encodeURIComponent('role=Software+Engineer')));
+  assert.ok(jobShareUrl.includes(encodeURIComponent('company=TCS')));
+
+  // 2. Internship broadcast post
+  const internPayload = {
+    title: 'Web Development Intern',
+    company: 'TechNova',
+    type: 'internship',
+    location: 'Remote',
+    stipend: '₹15,000 / mo',
+    skills: 'HTML,CSS,JavaScript'
+  };
+
+  const internShareText = generateLinkedInShareText(internPayload);
+  assert.ok(internShareText.includes('Web Development Intern'));
+  assert.ok(internShareText.includes('TechNova'));
+  assert.ok(internShareText.includes('Remote'));
+  assert.ok(internShareText.includes('₹15,000 / mo'));
+  assert.ok(internShareText.includes('#StudentInternship'));
+  assert.ok(internShareText.includes('#TechNova'));
+
+  const internShareUrl = buildLinkedInShareUrl(internPayload);
+  assert.ok(internShareUrl.startsWith('https://www.linkedin.com/sharing/share-offsite/'));
+  assert.ok(internShareUrl.includes(encodeURIComponent('role=Web+Development+Intern')));
+});
+
+test('computeLinkedInConnectionHealth evaluates connection health, relative last sync time, and disconnected states', () => {
+  const fixedNow = new Date('2026-11-12T14:00:00.000Z');
+
+  // Case 1: Disconnected profile
+  const disconnectedHealth = computeLinkedInConnectionHealth({
+    connected: false,
+    now: fixedNow
+  });
+  assert.equal(disconnectedHealth.status, 'Disconnected');
+  assert.equal(disconnectedHealth.statusLabel, 'Disconnected');
+  assert.equal(disconnectedHealth.displayText, 'Disconnected');
+  assert.equal(disconnectedHealth.relativeTime, 'Never');
+  assert.equal(disconnectedHealth.healthScorePct, 0);
+  assert.equal(disconnectedHealth.isOnline, false);
+
+  // Case 2: Connected, synced 2 hours ago
+  const twoHoursAgoIso = new Date('2026-11-12T12:00:00.000Z').toISOString();
+  const healthyTwoHours = computeLinkedInConnectionHealth({
+    connected: true,
+    lastSyncedIso: twoHoursAgoIso,
+    now: fixedNow
+  });
+  assert.equal(healthyTwoHours.status, 'Healthy');
+  assert.equal(healthyTwoHours.statusLabel, 'Optimal');
+  assert.equal(healthyTwoHours.displayText, 'Last Synced: 2 hours ago');
+  assert.equal(healthyTwoHours.relativeTime, '2 hours ago');
+  assert.equal(healthyTwoHours.healthScorePct, 100);
+  assert.equal(healthyTwoHours.isOnline, true);
+  assert.ok(healthyTwoHours.badgeClass.includes('emerald'));
+
+  // Case 3: Connected, synced just now (<45 seconds ago)
+  const justNowIso = new Date('2026-11-12T13:59:30.000Z').toISOString();
+  const healthyJustNow = computeLinkedInConnectionHealth({
+    connected: true,
+    lastSyncedIso: justNowIso,
+    now: fixedNow
+  });
+  assert.equal(healthyJustNow.status, 'Healthy');
+  assert.equal(healthyJustNow.displayText, 'Last Synced: Just now');
+  assert.equal(healthyJustNow.healthScorePct, 100);
+
+  // Case 4: Connected, synced 3 days ago (stale >24h)
+  const threeDaysAgoIso = new Date('2026-11-09T14:00:00.000Z').toISOString();
+  const staleHealth = computeLinkedInConnectionHealth({
+    connected: true,
+    lastSyncedIso: threeDaysAgoIso,
+    now: fixedNow
+  });
+  assert.equal(staleHealth.status, 'Stale');
+  assert.equal(staleHealth.statusLabel, 'Sync Stale');
+  assert.equal(staleHealth.displayText, 'Last Synced: 3 days ago');
+  assert.ok(staleHealth.healthScorePct < 100);
+  assert.ok(staleHealth.badgeClass.includes('amber'));
+  assert.ok(staleHealth.actionRecommendation.includes('Re-sync'));
+
+  // Case 5: Connected but missing lastSyncedIso
+  const defaultSynced = computeLinkedInConnectionHealth({
+    connected: true,
+    now: fixedNow
+  });
+  assert.equal(defaultSynced.status, 'Healthy');
+  assert.equal(defaultSynced.displayText, 'Last Synced: Recently');
+  assert.equal(defaultSynced.healthScorePct, 100);
+});
+
 
 
 

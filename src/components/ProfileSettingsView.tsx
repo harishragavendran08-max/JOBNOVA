@@ -40,6 +40,7 @@ import {
 } from '../data/seedData';
 import {
   buildResumeStructuredData,
+  computeLinkedInConnectionHealth,
   computeProfileSkillGapAnalysis,
   computeProfileSkillProficiencyList,
   computeResumeHealthScore,
@@ -214,6 +215,11 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
     savedCertIds,
     enrolledCourseIds,
     customProficiencyOverrides: skillProficiencies
+  });
+
+  const linkedInHealth = computeLinkedInConnectionHealth({
+    connected: user?.linkedInConnected,
+    lastSyncedIso: user?.lastLinkedInSync
   });
 
   const skillProficiencyList = computeProfileSkillProficiencyList({
@@ -1485,15 +1491,23 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   Connected Account Sign-In
                 </span>
-                {user?.linkedInConnected && (
+                <div className="flex items-center gap-2">
                   <span
-                    data-testid="linkedin-connected-pill"
-                    className="inline-flex items-center gap-1.5 px-2 py-0.5 text-[11px] font-mono font-bold rounded-full bg-[#0A66C2]/10 text-[#0A66C2] border border-[#0A66C2]/30"
+                    data-testid="linkedin-connection-health-pill"
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-mono font-semibold rounded-full border transition-all ${linkedInHealth.badgeClass}`}
+                    title={`LinkedIn Connection Health: ${linkedInHealth.statusLabel} · ${linkedInHealth.displayText}`}
                   >
-                    <span className="w-1.5 h-1.5 rounded-full bg-[#0A66C2] animate-pulse" />
-                    <span>LinkedIn Connected ✓</span>
+                    <span
+                      data-testid="linkedin-health-pill-dot"
+                      className={`w-1.5 h-1.5 rounded-full ${linkedInHealth.dotColorClass} ${
+                        linkedInHealth.isOnline ? 'animate-pulse' : ''
+                      }`}
+                    />
+                    <span data-testid="linkedin-connection-health-pill-text">
+                      {user?.linkedInConnected ? linkedInHealth.displayText : 'LinkedIn: Disconnected'}
+                    </span>
                   </span>
-                )}
+                </div>
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
@@ -1528,26 +1542,29 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
               {/* LinkedIn Account Connection & Profile Import Hub */}
               <div
                 data-testid="linkedin-integration-panel"
-                className="mt-2.5 p-3.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-2.5"
+                className="mt-2.5 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs"
               >
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-6 rounded bg-[#0A66C2] text-white flex items-center justify-center font-bold text-xs">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-7 h-7 rounded-lg bg-[#0A66C2] text-white flex items-center justify-center font-bold text-xs shadow-2xs">
                       in
                     </span>
                     <div>
                       <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                        <span>LinkedIn Account</span>
-                        {user?.linkedInConnected && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 font-semibold font-mono">
-                            Synced
+                        <span>LinkedIn Integration</span>
+                        <span
+                          data-testid="linkedin-connection-health-badge"
+                          className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold font-mono ${linkedInHealth.badgeClass}`}
+                        >
+                          <span data-testid="linkedin-connection-health-label">
+                            {linkedInHealth.statusLabel}
                           </span>
-                        )}
+                        </span>
                       </div>
                       <div className="text-[11px] text-slate-500 dark:text-slate-400">
                         {user?.linkedInConnected
-                          ? `Imported work history & summary · ${workHistory.length} roles`
-                          : 'Connect to import work history, summary & headline.'}
+                          ? `Imported work history & professional summary · ${workHistory.length} roles`
+                          : 'Connect your LinkedIn account to import work history, summary & skills.'}
                       </div>
                     </div>
                   </div>
@@ -1559,7 +1576,7 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
                         data-testid="reimport-linkedin-btn"
                         onClick={handleDirectImportLinkedIn}
                         disabled={isConnectingLinkedIn}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-[#0A66C2] bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-slate-800 rounded border border-[#0A66C2]/30 transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-[#0A66C2] bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg border border-[#0A66C2]/30 transition-colors cursor-pointer"
                         title="Re-sync work experience and summary from LinkedIn"
                       >
                         <RefreshCw className={`w-3 h-3 ${isConnectingLinkedIn ? 'animate-spin' : ''}`} />
@@ -1569,7 +1586,7 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
                         type="button"
                         data-testid="disconnect-linkedin-btn"
                         onClick={handleDisconnectLinkedIn}
-                        className="inline-flex items-center gap-1 px-2 py-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 bg-white dark:bg-slate-900 rounded border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2 py-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
                         title="Disconnect LinkedIn account"
                       >
                         <Unlink className="w-3 h-3" />
@@ -1609,6 +1626,68 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
                       </button>
                     </div>
                   )}
+                </div>
+
+                {/* Explicit Connection Health Visual Indicator */}
+                <div
+                  data-testid="linkedin-connection-health-indicator"
+                  className="pt-2.5 border-t border-slate-200/90 dark:border-slate-700/80 space-y-2"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          data-testid="linkedin-health-status-dot"
+                          className={`w-2.5 h-2.5 rounded-full shrink-0 ${linkedInHealth.dotColorClass} ${
+                            linkedInHealth.isOnline ? 'animate-pulse' : ''
+                          }`}
+                          aria-hidden="true"
+                        />
+                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                          Connection Health:
+                        </span>
+                      </div>
+                      <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                        {linkedInHealth.status === 'Healthy'
+                          ? 'Optimal Sync'
+                          : linkedInHealth.status === 'Stale'
+                          ? 'Stale Sync'
+                          : 'Inactive'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 text-xs">
+                      <span className="text-slate-500 dark:text-slate-400">Health Indicator:</span>
+                      <span
+                        data-testid="linkedin-connection-health-time"
+                        className="font-mono font-bold text-slate-900 dark:text-slate-100"
+                      >
+                        {linkedInHealth.displayText}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3 text-[11px] text-slate-500 dark:text-slate-400">
+                    <span className="truncate">{linkedInHealth.actionRecommendation}</span>
+                    <span className="font-mono font-semibold shrink-0 text-slate-700 dark:text-slate-300">
+                      Score: {linkedInHealth.healthScorePct}%
+                    </span>
+                  </div>
+
+                  {/* Health score meter */}
+                  <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                    <div
+                      data-testid="linkedin-health-progress-bar"
+                      className={`h-full transition-all duration-300 ${
+                        linkedInHealth.status === 'Healthy'
+                          ? 'bg-emerald-500'
+                          : linkedInHealth.status === 'Stale'
+                          ? 'bg-amber-500'
+                          : 'bg-slate-400'
+                      }`}
+                      style={{ width: `${linkedInHealth.healthScorePct}%` }}
+                    />
+                  </div>
                 </div>
               </div>
             </div>

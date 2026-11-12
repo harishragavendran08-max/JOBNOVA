@@ -62,6 +62,7 @@ import { SkillProficiencyRadarCard } from './components/SkillProficiencyRadarCar
 import { JobSalaryComparisonCard } from './components/JobSalaryComparisonCard';
 import { CareerTimelineCard } from './components/CareerTimelineCard';
 import { PersonalizedAlertsCard } from './components/PersonalizedAlertsCard';
+import { FullStackCodeLabView } from './components/FullStackCodeLabView';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('home');
@@ -1252,6 +1253,11 @@ export default function App() {
               </div>
             )}
           </div>
+        )}
+
+        {/* ==================== 3.5 FULL-STACK ENGINEERING CODE LAB (Java, Spring Boot, React.js, JS, HTML5, CSS3, MySQL) ==================== */}
+        {activeTab === 'codelab' && (
+          <FullStackCodeLabView />
         )}
 
         {/* ==================== 4. LEARNING COURSES VIEW (learning.html) ==================== */}

@@ -113,10 +113,20 @@ export const SEED_JOBS: JobItem[] = [
   { id: 17, title: 'Game Developer', company: 'Unity Technologies', location: 'Hyderabad', description: 'Develop games using C# and Unity.', skills: 'csharp,unity,3d', type: 'Full-Time', ctc: '14.5 LPA' },
   { id: 18, title: 'Marketing Analyst', company: 'Byjus', location: 'Bengaluru', description: 'Analyze and optimize marketing campaigns.', skills: 'marketing,analytics,excel', type: 'Full-Time', ctc: '7.2 LPA' },
   { id: 19, title: 'Cloud Developer', company: 'Microsoft India', location: 'Hyderabad', description: 'Develop cloud-native applications.', skills: 'azure,csharp,dotnet', type: 'Full-Time', ctc: '26.0 LPA' },
-  { id: 20, title: 'Data Engineer', company: 'Reliance Jio', location: 'Mumbai', description: 'Build data pipelines for analytics.', skills: 'python,spark,hadoop,sql', type: 'Full-Time', ctc: '13.5 LPA' }
+  { id: 20, title: 'Data Engineer', company: 'Reliance Jio', location: 'Mumbai', description: 'Build data pipelines for analytics.', skills: 'python,spark,hadoop,sql', type: 'Full-Time', ctc: '13.5 LPA' },
+  { id: 21, title: 'Junior Java & Spring Boot Engineer', company: 'Persistent Systems', location: 'Pune', description: 'Build robust enterprise microservices using Java 17, Spring Boot, Hibernate, and MySQL with Docker containerization.', skills: 'java,springboot,mysql,docker', type: 'Full-Time', ctc: '8.0 LPA' },
+  { id: 22, title: 'React.js Frontend Engineer', company: 'Swiggy', location: 'Bengaluru', description: 'Develop responsive high-performance web applications using React.js, TypeScript, Tailwind CSS, and Redux Toolkit.', skills: 'react,javascript,html,css,typescript', type: 'Full-Time', ctc: '19.5 LPA' },
+  { id: 23, title: 'Full-Stack SDE (Java + React)', company: 'Razorpay', location: 'Bengaluru', description: 'Architect payments checkout flows and merchant portals using Java Spring Boot backends and React frontends.', skills: 'java,springboot,react,javascript,mysql', type: 'Full-Time', ctc: '22.0 LPA' },
+  { id: 24, title: 'MySQL Database Administrator & SRE', company: 'Paytm', location: 'Noida', description: 'Optimize high-throughput MySQL replication clusters, query plans, InnoDB buffer pools, and automated backups.', skills: 'mysql,sql,linux,database', type: 'Full-Time', ctc: '13.0 LPA' },
+  { id: 25, title: 'Enterprise Java Platform Engineer', company: 'Cisco India', location: 'Chennai', description: 'Develop distributed networking cloud platforms using Core Java, Spring Cloud, Kafka, and relational databases.', skills: 'java,springboot,kafka,sql', type: 'Full-Time', ctc: '21.0 LPA' },
+  { id: 26, title: 'Associate Software Engineer', company: 'LTIMindtree', location: 'Chennai', description: 'Participate in agile software development life cycle building web applications with HTML5, CSS3, JavaScript, and Java.', skills: 'java,javascript,html,css,sql', type: 'Full-Time', ctc: '6.5 LPA' },
+  { id: 27, title: 'Frontend UI Engineer', company: 'Freshworks', location: 'Chennai', description: 'Craft polished customer experience interfaces using modern JavaScript, React, CSS3 animations, and web accessibility standards.', skills: 'react,javascript,html,css,uiux', type: 'Full-Time', ctc: '17.0 LPA' },
+  { id: 28, title: 'Backend API Developer (Spring Boot)', company: 'PhonePe', location: 'Bengaluru', description: 'Design low-latency financial transaction APIs handling millions of daily requests with Spring Boot and MySQL.', skills: 'java,springboot,mysql,rest-api', type: 'Full-Time', ctc: '25.0 LPA' },
+  { id: 29, title: 'Software Development Engineer - 1', company: 'Zoho', location: 'Chennai', description: 'Work directly on core Zoho productivity suite applications using Java, JavaScript, and relational database persistence.', skills: 'java,javascript,mysql,algorithms', type: 'Full-Time', ctc: '10.5 LPA' },
+  { id: 30, title: 'Full-Stack Web Architect', company: 'Dell Technologies', location: 'Remote', description: 'Develop modular enterprise cloud portals combining Spring Boot REST services with modern React SPA frontends.', skills: 'java,springboot,react,html,css,mysql', type: 'Remote', ctc: '23.5 LPA' }
 ];
 
-// Exact 8 Internships from src/main/resources/data.sql
+// Curated Internships with stipends and real software engineering technologies
 export const SEED_INTERNSHIPS: InternshipItem[] = [
   { id: 1, title: 'Web Development Intern', company: 'TechNova', location: 'Remote', description: 'Assist in building front-end web apps using HTML, CSS, and JS.', duration: '3 Months', stipend: '₹15,000 / mo' },
   { id: 2, title: 'Java Backend Intern', company: 'TCS', location: 'Chennai', description: 'Develop REST APIs using Java and Spring Boot.', duration: '6 Months', stipend: '₹20,000 / mo' },
@@ -125,7 +135,15 @@ export const SEED_INTERNSHIPS: InternshipItem[] = [
   { id: 5, title: 'UI/UX Intern', company: 'Adobe India', location: 'Remote', description: 'Design modern interfaces in Figma.', duration: '3 Months', stipend: '₹45,000 / mo' },
   { id: 6, title: 'Cybersecurity Intern', company: 'HCL', location: 'Noida', description: 'Assist in penetration testing and threat analysis.', duration: '6 Months', stipend: '₹18,000 / mo' },
   { id: 7, title: 'DevOps Intern', company: 'Wipro', location: 'Hyderabad', description: 'Work with Docker and CI/CD pipelines.', duration: '4 Months', stipend: '₹20,000 / mo' },
-  { id: 8, title: 'Marketing Intern', company: 'Byjus', location: 'Remote', description: 'Assist in online marketing and campaign tracking.', duration: '3 Months', stipend: '₹12,000 / mo' }
+  { id: 8, title: 'Marketing Intern', company: 'Byjus', location: 'Remote', description: 'Assist in online marketing and campaign tracking.', duration: '3 Months', stipend: '₹12,000 / mo' },
+  { id: 9, title: 'Spring Boot Backend Intern', company: 'Cognizant', location: 'Chennai', description: 'Assist in developing RESTful microservices, JUnit tests, and MySQL data models for healthcare clients.', duration: '6 Months', stipend: '₹22,000 / mo' },
+  { id: 10, title: 'React & Frontend Web Intern', company: 'Zoho', location: 'Chennai', description: 'Build interactive user components, state management workflows, and responsive layouts using React and CSS3.', duration: '6 Months', stipend: '₹25,000 / mo' },
+  { id: 11, title: 'Full-Stack Developer Intern', company: 'Freshworks', location: 'Chennai', description: 'Work across full-stack features connecting Java backends with dynamic JavaScript/React web interfaces.', duration: '4 Months', stipend: '₹35,000 / mo' },
+  { id: 12, title: 'Database & SQL Engineering Intern', company: 'TCS', location: 'Bengaluru', description: 'Query optimization, schema indexing, and stored procedure development on enterprise MySQL systems.', duration: '3 Months', stipend: '₹18,000 / mo' },
+  { id: 13, title: 'Software Engineering Summer Intern', company: 'Microsoft India', location: 'Hyderabad', description: 'Join Azure cloud or developer tooling teams building reliable cloud services and modern web experiences.', duration: '2 Months', stipend: '₹80,000 / mo' },
+  { id: 14, title: 'Java Software Development Intern', company: 'Oracle India', location: 'Bengaluru', description: 'Develop cloud infrastructure modules, automated testing suites, and API endpoints using Java 17.', duration: '6 Months', stipend: '₹40,000 / mo' },
+  { id: 15, title: 'Frontend Engineering Intern', company: 'Swiggy', location: 'Remote', description: 'Implement consumer-facing web experiences using HTML5, CSS3, modern JavaScript, and React components.', duration: '3 Months', stipend: '₹30,000 / mo' },
+  { id: 16, title: 'Cloud & DevOps Intern', company: 'Amazon India', location: 'Chennai', description: 'Automate build pipelines, container deployments with Docker, and cloud monitoring on AWS.', duration: '6 Months', stipend: '₹60,000 / mo' }
 ];
 
 // Exact 30 Courses from src/main/resources/data.sql
@@ -162,7 +180,7 @@ export const SEED_COURSES: CourseItem[] = [
   { id: 30, title: 'Career Growth & Soft Skills', provider: 'LinkedIn Learning', url: 'https://linkedin.com/learning', description: 'Develop communication, teamwork, and leadership skills.', level: 'Beginner' }
 ];
 
-// Exact 7 Certifications from src/main/resources/data.sql
+// Curated Industry Certifications for Full-Stack, Java, Cloud & Database Roles
 export const SEED_CERTIFICATIONS: CertificationItem[] = [
   { id: 1, name: 'Java SE 11 Developer', issuer: 'Oracle', credentialUrl: 'https://education.oracle.com/java-se-11-developer' },
   { id: 2, name: 'AWS Certified Cloud Practitioner', issuer: 'Amazon', credentialUrl: 'https://aws.amazon.com/certification/' },
@@ -170,7 +188,14 @@ export const SEED_CERTIFICATIONS: CertificationItem[] = [
   { id: 4, name: 'Microsoft Azure Fundamentals', issuer: 'Microsoft', credentialUrl: 'https://learn.microsoft.com/en-us/certifications' },
   { id: 5, name: 'Python Programming Professional Certificate', issuer: 'Coursera', credentialUrl: 'https://coursera.org/professional-certificates/python' },
   { id: 6, name: 'Cybersecurity Analyst Professional', issuer: 'IBM', credentialUrl: 'https://www.ibm.com/training/cybersecurity' },
-  { id: 7, name: 'Spring Framework Developer', issuer: 'VMware', credentialUrl: 'https://spring.io/certification' }
+  { id: 7, name: 'Spring Framework Developer', issuer: 'VMware', credentialUrl: 'https://spring.io/certification' },
+  { id: 8, name: 'Oracle Certified Professional: Java SE 17 Developer', issuer: 'Oracle', credentialUrl: 'https://education.oracle.com/oracle-certified-professional-java-se-17-developer' },
+  { id: 9, name: 'Meta Front-End Developer Professional Certificate', issuer: 'Coursera', credentialUrl: 'https://www.coursera.org/professional-certificates/meta-front-end-developer' },
+  { id: 10, name: 'AWS Certified Developer – Associate', issuer: 'Amazon', credentialUrl: 'https://aws.amazon.com/certification/certified-developer-associate/' },
+  { id: 11, name: 'Google Associate Cloud Engineer', issuer: 'Google', credentialUrl: 'https://cloud.google.com/learn/certification/cloud-engineer' },
+  { id: 12, name: 'MySQL 8.0 Database Developer Certified Professional', issuer: 'Oracle', credentialUrl: 'https://education.oracle.com/mysql-80-database-developer' },
+  { id: 13, name: 'IBM Full Stack Software Developer Certificate', issuer: 'IBM', credentialUrl: 'https://www.coursera.org/professional-certificates/ibm-full-stack-cloud-developer' },
+  { id: 14, name: 'Microsoft Certified: Azure Developer Associate (AZ-204)', issuer: 'Microsoft', credentialUrl: 'https://learn.microsoft.com/en-us/credentials/certifications/azure-developer/' }
 ];
 
 // Predefined knowledge base from GeminiController.java + extended topics

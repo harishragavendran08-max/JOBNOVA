@@ -5,6 +5,7 @@ export type ActiveTab =
   | 'home'
   | 'jobs'
   | 'internships'
+  | 'codelab'
   | 'learning'
   | 'certifications'
   | 'ai'
@@ -29,6 +30,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'home', label: 'Overview' },
     { id: 'jobs', label: 'Jobs' },
     { id: 'internships', label: 'Internships' },
+    { id: 'codelab', label: 'Code Lab' },
     { id: 'learning', label: 'Learning' },
     { id: 'certifications', label: 'Certifications' },
     { id: 'ai', label: 'AI Career Assistant' }

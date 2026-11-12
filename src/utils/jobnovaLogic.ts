@@ -2559,8 +2559,193 @@ export function formatWorkExperienceDuration(item: WorkExperienceItem): string {
   return `${start} – ${end}`;
 }
 
+export interface LinkedInShareOpportunityPayload {
+  title: string;
+  company: string;
+  type?: 'job' | 'internship' | string;
+  location?: string;
+  ctc?: string;
+  stipend?: string;
+  skills?: string;
+}
 
+/**
+ * Generates an engaging, professional broadcast text for students
+ * to broadcast their application interest to their LinkedIn professional network.
+ */
+export function generateLinkedInShareText(item: LinkedInShareOpportunityPayload): string {
+  const isInternship =
+    item.type?.toLowerCase().includes('intern') ||
+    !!item.stipend ||
+    item.title.toLowerCase().includes('intern');
 
+  const compLabel = item.company?.trim() || 'Tech';
+  const roleLabel = item.title?.trim() || 'Software Engineer';
+  const locationLabel = item.location?.trim() ? ` in ${item.location}` : '';
+  const packageLabel = item.ctc
+    ? ` (${item.ctc})`
+    : item.stipend
+    ? ` (${item.stipend})`
+    : '';
 
+  const cleanCompanyTag = compLabel.replace(/[^a-zA-Z0-9]/g, '');
+  const tags = [
+    '#JobNova',
+    cleanCompanyTag ? `#${cleanCompanyTag}` : '#CareerOpportunity',
+    isInternship ? '#StudentInternship' : '#SoftwareEngineering',
+    '#CampusHiring',
+    '#FullStack'
+  ];
 
+  return `Excited to announce my interest in the ${roleLabel} opportunity at ${compLabel}${locationLabel}${packageLabel}! Exploring full-stack software engineering and campus placement opportunities on JobNova. Check it out and let's connect! 🚀\n\n${tags.join(' ')}`;
+}
 
+/**
+ * Builds a LinkedIn share-offsite URL with encoded target URL and role parameters.
+ */
+export function buildLinkedInShareUrl(
+  item: LinkedInShareOpportunityPayload,
+  baseUrl = 'https://jobnova.career'
+): string {
+  const shareTargetUrl = new URL(baseUrl);
+  shareTargetUrl.searchParams.set('role', item.title);
+  shareTargetUrl.searchParams.set('company', item.company);
+  if (item.type) shareTargetUrl.searchParams.set('type', item.type);
+  if (item.location) shareTargetUrl.searchParams.set('location', item.location);
+
+  const linkedInEndpoint = new URL('https://www.linkedin.com/sharing/share-offsite/');
+  linkedInEndpoint.searchParams.set('url', shareTargetUrl.toString());
+
+  return linkedInEndpoint.toString();
+}
+
+export type LinkedInConnectionHealthStatus = 'Healthy' | 'Stale' | 'Disconnected';
+
+export interface LinkedInConnectionHealth {
+  status: LinkedInConnectionHealthStatus;
+  statusLabel: string;
+  displayText: string;
+  relativeTime: string;
+  healthScorePct: number;
+  badgeClass: string;
+  dotColorClass: string;
+  isOnline: boolean;
+  actionRecommendation: string;
+}
+
+/**
+ * Evaluates the Connection Health of the LinkedIn integration,
+ * providing status, human-readable last synced text (e.g. 'Last Synced: 2 hours ago' or 'Disconnected'),
+ * visual badge styling, health score percentage, and actionable recommendations.
+ */
+export function computeLinkedInConnectionHealth(params: {
+  connected?: boolean;
+  lastSyncedIso?: string;
+  now?: Date | string | number;
+}): LinkedInConnectionHealth {
+  const { connected, lastSyncedIso, now = new Date() } = params;
+
+  if (!connected) {
+    return {
+      status: 'Disconnected',
+      statusLabel: 'Disconnected',
+      displayText: 'Disconnected',
+      relativeTime: 'Never',
+      healthScorePct: 0,
+      badgeClass:
+        'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700',
+      dotColorClass: 'bg-slate-400 dark:bg-slate-500',
+      isOnline: false,
+      actionRecommendation: 'Connect your LinkedIn account to enable automatic sync and profile enrichment.'
+    };
+  }
+
+  const nowDate = now instanceof Date ? now : new Date(now);
+  const nowMs = Number.isNaN(nowDate.getTime()) ? Date.now() : nowDate.getTime();
+
+  if (!lastSyncedIso) {
+    return {
+      status: 'Healthy',
+      statusLabel: 'Optimal',
+      displayText: 'Last Synced: Recently',
+      relativeTime: 'Recently',
+      healthScorePct: 100,
+      badgeClass:
+        'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+      dotColorClass: 'bg-emerald-500',
+      isOnline: true,
+      actionRecommendation: 'LinkedIn connection is active and healthy.'
+    };
+  }
+
+  const syncDate = new Date(lastSyncedIso);
+  const syncMs = syncDate.getTime();
+
+  if (Number.isNaN(syncMs)) {
+    return {
+      status: 'Healthy',
+      statusLabel: 'Optimal',
+      displayText: 'Last Synced: Recently',
+      relativeTime: 'Recently',
+      healthScorePct: 100,
+      badgeClass:
+        'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+      dotColorClass: 'bg-emerald-500',
+      isOnline: true,
+      actionRecommendation: 'LinkedIn connection is active and healthy.'
+    };
+  }
+
+  const diffMs = Math.max(0, nowMs - syncMs);
+  const diffSec = Math.floor(diffMs / 1000);
+  const diffMin = Math.floor(diffSec / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+
+  let relativeTime: string;
+  if (diffSec < 45) {
+    relativeTime = 'Just now';
+  } else if (diffMin < 60) {
+    relativeTime = `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+  } else if (diffHour < 24) {
+    relativeTime = `${diffHour} hour${diffHour === 1 ? '' : 's'} ago`;
+  } else if (diffDay === 1) {
+    relativeTime = 'Yesterday';
+  } else {
+    relativeTime = `${diffDay} days ago`;
+  }
+
+  const displayText = `Last Synced: ${relativeTime}`;
+
+  // Stale if last synced more than 24 hours ago
+  const isStale = diffHour >= 24;
+
+  if (isStale) {
+    return {
+      status: 'Stale',
+      statusLabel: 'Sync Stale',
+      displayText,
+      relativeTime,
+      healthScorePct: Math.max(40, 100 - diffDay * 15),
+      badgeClass:
+        'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800',
+      dotColorClass: 'bg-amber-500',
+      isOnline: true,
+      actionRecommendation:
+        'Your profile sync is older than 24 hours. Click "Re-sync" to update with latest LinkedIn skills and roles.'
+    };
+  }
+
+  return {
+    status: 'Healthy',
+    statusLabel: 'Optimal',
+    displayText,
+    relativeTime,
+    healthScorePct: 100,
+    badgeClass:
+      'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800',
+    dotColorClass: 'bg-emerald-500',
+    isOnline: true,
+    actionRecommendation: 'LinkedIn connection is active and healthy.'
+  };
+}
