@@ -36,10 +36,13 @@ import {
   MockInterviewSession
 } from './src/utils/mockInterviewLogic.ts';
 import {
-  buildUserProfileFromSignUp,
-  validateLoginInput,
-  validateSignUpInput
+  buildUserProfileFromSignUp
 } from './src/utils/authLogic.ts';
+import {
+  validateJobPostBean,
+  validateLoginBean,
+  validateSignUpBean
+} from './src/utils/beanValidationLogic.ts';
 import {
   createUserAlertFromJob,
   findAlertForJob,
@@ -106,21 +109,25 @@ async function startServer() {
   });
 
   app.post('/api/jobs', (req, res) => {
-    const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
-    const company = typeof req.body?.company === 'string' ? req.body.company.trim() : '';
-    const location = typeof req.body?.location === 'string' ? req.body.location.trim() : 'Bengaluru';
+    const beanValidation = validateJobPostBean(req.body || {});
+    if (!beanValidation.valid) {
+      res.status(400).json(beanValidation);
+      return;
+    }
+
+    const title = String(req.body.title).trim();
+    const company = String(req.body.company).trim();
+    const location =
+      typeof req.body?.location === 'string' && req.body.location.trim()
+        ? req.body.location.trim()
+        : 'Bengaluru';
     const description =
       typeof req.body?.description === 'string' && req.body.description.trim()
         ? req.body.description.trim()
         : `Newly posted ${title} role at ${company}.`;
-    const skills = typeof req.body?.skills === 'string' ? req.body.skills.trim() : '';
+    const skills = String(req.body.skills).trim();
     const type = typeof req.body?.type === 'string' ? req.body.type.trim() : 'Full-Time';
     const ctc = typeof req.body?.ctc === 'string' ? req.body.ctc.trim() : '14.5 LPA';
-
-    if (!title || !company || !skills) {
-      res.status(400).json({ error: 'Job title, company, and skills are required.' });
-      return;
-    }
 
     const createdJob: JobItem = {
       id: nextJobId++,
@@ -282,7 +289,7 @@ async function startServer() {
     const trackId = typeof req.body?.trackId === 'string' ? req.body.trackId : undefined;
     const location = typeof req.body?.location === 'string' ? req.body.location : undefined;
 
-    const validation = validateSignUpInput({
+    const validation = validateSignUpBean({
       name,
       email,
       password,
@@ -290,7 +297,7 @@ async function startServer() {
       acceptTerms
     });
     if (!validation.valid) {
-      res.status(400).json({ authenticated: false, error: validation.error });
+      res.status(400).json({ authenticated: false, ...validation });
       return;
     }
 
@@ -320,14 +327,14 @@ async function startServer() {
   });
 
   app.post('/api/auth/login', (req, res) => {
-    const provider = req.body?.provider || (req.body?.email ? 'Email' : 'Google');
+    const provider = req.body?.provider || (req.body?.email !== undefined ? 'Email' : 'Google');
 
     if (provider === 'Email') {
       const email = typeof req.body?.email === 'string' ? req.body.email : '';
       const password = typeof req.body?.password === 'string' ? req.body.password : '';
-      const validation = validateLoginInput({ email, password });
+      const validation = validateLoginBean({ email, password });
       if (!validation.valid) {
-        res.status(400).json({ authenticated: false, error: validation.error });
+        res.status(400).json({ authenticated: false, ...validation });
         return;
       }
 

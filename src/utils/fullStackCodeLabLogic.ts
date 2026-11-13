@@ -1037,6 +1037,13 @@ export const SPRING_BOOT_ANNOTATION_GUIDE: SpringBootAnnotationItem[] = [
     description: 'Enables Cross-Origin Resource Sharing (CORS) on REST controllers for React.js frontend requests.',
     codeSnippet: `@RestController\n@RequestMapping("/api/courses")\n@CrossOrigin(origins = "http://localhost:3000")\npublic class CourseController {\n    // Handles pre-flight OPTIONS requests seamlessly\n}`,
     keyRule: 'Specify exact frontend origins in production to prevent unauthorized cross-origin data exposure.'
+  },
+  {
+    name: '@Valid · @NotBlank · @Email',
+    layer: 'Web/REST',
+    description: 'Enforces Jakarta Bean Validation on JobController and AuthController request DTOs before executing business logic.',
+    codeSnippet: `public record SignUpRequest(\n    @NotBlank(message = "Name is required") @Size(min = 2, max = 80) String name,\n    @NotBlank(message = "Email is required") @Email(message = "Invalid email") String email,\n    @NotBlank @Size(min = 8, max = 100) String password\n) {}\n\n@PostMapping("/signup")\npublic ResponseEntity<?> register(@Valid @RequestBody SignUpRequest req) {\n    return ResponseEntity.status(HttpStatus.CREATED).body(authService.register(req));\n}`,
+    keyRule: 'Pair @Valid on @RequestBody parameters with a @ExceptionHandler(MethodArgumentNotValidException.class) to return structured 400 fieldErrors.'
   }
 ];
 
@@ -1280,6 +1287,25 @@ export const SPRING_BOOT_ENTITY_TEMPLATES: SpringBootEntitySpec[] = [
       stage: 'Interviewing',
       appliedAt: '2026-11-12'
     }
+  },
+  {
+    id: 'auth-user',
+    entityName: 'AuthUser',
+    tableName: 'users',
+    endpointPath: '/api/auth/signup',
+    description: 'Candidate account registration and authentication validated via Spring Boot @NotBlank, @Email, and @Size.',
+    fields: [
+      { name: 'name', javaType: 'String', mysqlType: 'VARCHAR(80) NOT NULL' },
+      { name: 'email', javaType: 'String', mysqlType: 'VARCHAR(120) NOT NULL UNIQUE' },
+      { name: 'password', javaType: 'String', mysqlType: 'VARCHAR(120) NOT NULL' },
+      { name: 'location', javaType: 'String', mysqlType: 'VARCHAR(80) NOT NULL' }
+    ],
+    samplePostPayload: {
+      name: 'Ananya Sharma',
+      email: 'ananya.sharma@jobnova.in',
+      password: 'Password123',
+      location: 'Bengaluru, India'
+    }
   }
 ];
 
@@ -1300,11 +1326,22 @@ export function generateSpringBootFullStackBundle(spec: SpringBootEntitySpec): G
 
   const entityFields = spec.fields
     .map((f) => {
-      const validationAnnotation =
-        f.javaType === 'String'
-          ? `    @NotBlank(message = "${f.name} is required")`
-          : `    @NotNull(message = "${f.name} is required")`;
-      return `${validationAnnotation}\n    @Column(name = "${toSnakeCase(f.name)}", nullable = false)\n    private ${f.javaType} ${f.name};`;
+      const isEmailField = f.javaType === 'String' && f.name.toLowerCase().includes('email');
+      const isPasswordField = f.javaType === 'String' && f.name.toLowerCase().includes('password');
+      const annotations: string[] = [];
+      if (f.javaType === 'String') {
+        annotations.push(`    @NotBlank(message = "${f.name} is required")`);
+        if (isEmailField) {
+          annotations.push(`    @Email(message = "${f.name} must be a valid email address")`);
+        } else if (isPasswordField) {
+          annotations.push(`    @Size(min = 8, max = 100, message = "${f.name} must be between 8 and 100 characters")`);
+        } else {
+          annotations.push(`    @Size(min = 2, max = 255, message = "${f.name} must be between 2 and 255 characters")`);
+        }
+      } else {
+        annotations.push(`    @NotNull(message = "${f.name} is required")`);
+      }
+      return `${annotations.join('\n')}\n    @Column(name = "${toSnakeCase(f.name)}", nullable = false)\n    private ${f.javaType} ${f.name};`;
     })
     .join('\n\n');
 
@@ -1318,8 +1355,10 @@ export function generateSpringBootFullStackBundle(spec: SpringBootEntitySpec): G
   const entityJava = `package com.jobnova.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 @Entity
 @Table(name = "${table}")
@@ -1416,8 +1455,12 @@ import com.jobnova.service.${entity}Service;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.*;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("${spec.endpointPath}")
@@ -1444,6 +1487,19 @@ public class ${entity}Controller {
     public ResponseEntity<Void> remove(@PathVariable Long id) {
         service.deleteById(id);
         return ResponseEntity.noContent().build();
+    }
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, Object>> handleBeanValidationErrors(MethodArgumentNotValidException ex) {
+        Map<String, String> fieldErrors = new LinkedHashMap<>();
+        for (FieldError fe : ex.getBindingResult().getFieldErrors()) {
+            fieldErrors.putIfAbsent(fe.getField(), fe.getDefaultMessage());
+        }
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("status", HttpStatus.BAD_REQUEST.value());
+        body.put("exception", ex.getClass().getName());
+        body.put("fieldErrors", fieldErrors);
+        return ResponseEntity.badRequest().body(body);
     }
 }`;
 
