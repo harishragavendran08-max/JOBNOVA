@@ -79,35 +79,35 @@ export const PersonalizedAlertsCard: React.FC<PersonalizedAlertsCardProps> = ({
     <section
       aria-label="Personalized Career Alerts"
       data-testid="personalized-alerts-card"
-      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-6 shadow-sm"
+      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-6"
     >
       {/* Header with KPI Readouts & Quick Link */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-slate-200 dark:border-slate-800">
         <div className="space-y-1">
-          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-indigo-600 dark:text-indigo-400">
-            <Bell className="w-4 h-4 text-amber-500 animate-pulse" />
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-[#2557A7] dark:text-blue-400">
+            <Bell className="w-4 h-4 text-[#2557A7] dark:text-blue-400 shrink-0" />
             <span>Personalized Alerts &amp; Opportunity Matcher</span>
             <span aria-hidden="true">·</span>
             <span className="text-slate-500 dark:text-slate-400 font-normal">
-              Triggered by recently added &amp; progressed profile skills
+              Triggered by profile skill progression
             </span>
           </div>
-          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-            <span>Skill-Driven Job &amp; Internship Recommendations</span>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+            Skill-Driven Job &amp; Internship Recommendations
           </h2>
           <p className="text-xs text-slate-600 dark:text-slate-400 max-w-3xl leading-relaxed">
-            As you add skills or advance proficiency (e.g., from Beginner to Advanced in your Profile), JobNova dynamically alerts you to newly unlocked full-time roles and student internships matching your verified tech stack.
+            As you add skills or advance proficiency in your Profile, JobNova dynamically matches newly unlocked full-time roles and student internships to your verified tech stack.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-          <div className="px-3.5 py-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-800">
-            <div className="text-[10px] font-semibold text-indigo-600 dark:text-indigo-400">
+        <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <div className="px-3.5 py-2 rounded-lg bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-[#2557A7] dark:text-blue-400">
               Matched Opportunities
             </div>
             <div
               data-testid="alerts-total-count"
-              className="text-base font-bold font-mono tabular-nums text-indigo-950 dark:text-indigo-200"
+              className="text-base font-bold font-mono tabular-nums text-slate-900 dark:text-slate-100"
             >
               {alertsData.totalAlertsCount} Roles
             </div>
@@ -115,7 +115,7 @@ export const PersonalizedAlertsCard: React.FC<PersonalizedAlertsCardProps> = ({
           <button
             type="button"
             onClick={onNavigateToProfile}
-            className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+            className="px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-[#2557A7] hover:text-[#2557A7] rounded-lg transition-colors cursor-pointer whitespace-nowrap"
           >
             Calibrate Skills in Profile →
           </button>
@@ -134,9 +134,9 @@ export const PersonalizedAlertsCard: React.FC<PersonalizedAlertsCardProps> = ({
               type="button"
               data-testid="alert-skill-filter-all"
               onClick={() => setSelectedSkillFilter('ALL')}
-              className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 selectedSkillFilter === 'ALL'
-                  ? 'bg-indigo-600 text-white'
+                  ? 'bg-[#2557A7] text-white dark:bg-blue-600'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
               }`}
             >
@@ -148,9 +148,9 @@ export const PersonalizedAlertsCard: React.FC<PersonalizedAlertsCardProps> = ({
                 type="button"
                 data-testid={`alert-skill-filter-${tab.key}`}
                 onClick={() => setSelectedSkillFilter(tab.key)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                   selectedSkillFilter.toLowerCase() === tab.key.toLowerCase()
-                    ? 'bg-indigo-600 text-white'
+                    ? 'bg-[#2557A7] text-white dark:bg-blue-600'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                 }`}
               >
@@ -244,23 +244,23 @@ export const PersonalizedAlertsCard: React.FC<PersonalizedAlertsCardProps> = ({
               <div
                 key={group.skillKey}
                 data-testid={`skill-alert-group-${group.skillKey}`}
-                className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 p-5 space-y-4"
+                className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-4"
               >
-                {/* Skill Group Header Badge */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200/80 dark:border-slate-800">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                {/* Skill Group Header */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                     <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
                       {group.skillLabel} Alerts
                     </h3>
+                    <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
                     <span
                       data-testid={`skill-alert-badge-${group.skillKey}`}
-                      className={`px-2.5 py-0.5 text-[11px] font-mono font-semibold rounded-md border ${
+                      className={`text-xs font-mono font-semibold ${
                         group.reason === 'progressed_advanced'
-                          ? 'bg-emerald-50 dark:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                          ? 'text-[#087F31] dark:text-emerald-400'
                           : group.reason === 'recent_addition'
-                          ? 'bg-amber-50 dark:bg-amber-950/70 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
-                          : 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800'
+                          ? 'text-amber-700 dark:text-amber-400'
+                          : 'text-[#2557A7] dark:text-blue-400'
                       }`}
                     >
                       {group.badgeText}
@@ -280,22 +280,22 @@ export const PersonalizedAlertsCard: React.FC<PersonalizedAlertsCardProps> = ({
                       <article
                         key={`${rec.type}-${rec.id}`}
                         data-testid={`alert-rec-card-${rec.type}-${rec.id}`}
-                        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 flex flex-col justify-between space-y-3 transition-shadow hover:shadow-md"
+                        className="bg-white dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 hover:border-[#2557A7] dark:hover:border-blue-500 rounded-xl p-4 flex flex-col justify-between space-y-3"
                       >
                         <div className="space-y-2">
-                          <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center justify-between gap-2 text-xs">
                             <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-mono font-bold rounded uppercase tracking-wider ${
+                              className={`inline-flex items-center gap-1 font-mono font-bold uppercase tracking-wider ${
                                 isJob
-                                  ? 'bg-indigo-50 dark:bg-indigo-950/70 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800'
-                                  : 'bg-teal-50 dark:bg-teal-950/70 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800'
+                                  ? 'text-[#2557A7] dark:text-blue-400'
+                                  : 'text-[#087F31] dark:text-emerald-400'
                               }`}
                             >
                               {isJob ? <Briefcase className="w-3 h-3" /> : <GraduationCap className="w-3 h-3" />}
                               <span>{rec.type}</span>
                             </span>
 
-                            <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-200">
+                            <span className="font-mono text-xs font-bold text-[#087F31] dark:text-emerald-400 tabular-nums">
                               {rec.ctcOrStipend}
                             </span>
                           </div>
@@ -326,7 +326,7 @@ export const PersonalizedAlertsCard: React.FC<PersonalizedAlertsCardProps> = ({
                             <button
                               type="button"
                               onClick={() => onNavigateToJobs(group.skillKey)}
-                              className="text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 inline-flex items-center gap-0.5 cursor-pointer"
+                              className="text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-[#2557A7] dark:hover:text-blue-400 inline-flex items-center gap-0.5 cursor-pointer"
                             >
                               <span>View in Jobs</span>
                               <ChevronRight className="w-3 h-3" />
@@ -335,7 +335,7 @@ export const PersonalizedAlertsCard: React.FC<PersonalizedAlertsCardProps> = ({
                             <button
                               type="button"
                               onClick={() => onNavigateToInternships(group.skillKey)}
-                              className="text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-indigo-600 dark:hover:text-indigo-400 inline-flex items-center gap-0.5 cursor-pointer"
+                              className="text-xs font-semibold text-slate-600 dark:text-slate-400 hover:text-[#2557A7] dark:hover:text-blue-400 inline-flex items-center gap-0.5 cursor-pointer"
                             >
                               <span>View in Internships</span>
                               <ChevronRight className="w-3 h-3" />
@@ -356,8 +356,8 @@ export const PersonalizedAlertsCard: React.FC<PersonalizedAlertsCardProps> = ({
                             }}
                             className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                               rec.isApplied
-                                ? 'bg-emerald-600 text-white hover:bg-emerald-700'
-                                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                                ? 'bg-[#087F31] text-white hover:bg-[#066828]'
+                                : 'bg-[#2557A7] text-white hover:bg-[#164081] dark:bg-blue-600 dark:hover:bg-blue-500'
                             }`}
                           >
                             {rec.isApplied ? 'Applied ✓' : 'Quick Apply'}

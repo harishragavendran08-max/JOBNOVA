@@ -4,6 +4,11 @@ import {
   CourseItem,
   InternshipItem,
   JobItem,
+  SEED_LINKEDIN_EDUCATION,
+  SEED_LINKEDIN_HEADLINE,
+  SEED_LINKEDIN_PROFILE_SUMMARY,
+  SEED_LINKEDIN_SKILLS,
+  SEED_LINKEDIN_WORK_HISTORY,
   SPRING_BOOT_DIAGNOSTICS,
   SpringBootDiagnostic,
   UserProfile,
@@ -115,6 +120,70 @@ export function matchOfflineCareerAssistant(prompt: string): string {
   const normalized = (prompt || '').trim().toLowerCase();
   if (!normalized) {
     return 'Please enter a career question about resumes, interviews, LinkedIn, soft skills, or job preparation.';
+  }
+
+  if (normalized.includes('@transactional') || normalized.includes('requires_new') || normalized.includes('propagation')) {
+    return `Spring @Transactional Propagation & Proxy Follow-Up:
+• If Method A (REQUIRED) calls Method B (REQUIRES_NEW) on ANOTHER bean, Spring creates an independent physical transaction for B.
+• When B throws a RuntimeException, B's own transaction rolls back independently, and the AOP proxy marks B as rollback-only.
+• Because Method A catches the exception before it reaches A's proxy, A's outer transaction is NOT marked rollback-only and CAN still commit cleanly (ideal for non-critical audit logs).
+• Pitfall check: Calling \`this.methodB()\` inside the same bean bypasses the Spring AOP proxy, ignoring REQUIRES_NEW completely.`;
+  }
+
+  if (normalized.includes('n+1') || normalized.includes('hhh90003004') || normalized.includes('hibernate') || normalized.includes('entitygraph')) {
+    return `Hibernate / JPA N+1 & Pagination Follow-Up:
+• Combining \`JOIN FETCH\` on a collection (\`@OneToMany\`) with \`Pageable\` forces Hibernate to load all rows into JVM memory and paginate there (warning HHH90003004).
+• Production fix (2-step query): First fetch the paginated parent IDs cleanly with \`LIMIT/OFFSET\`, then fetch full entities with \`JOIN FETCH\` using \`WHERE e.id IN (:ids)\`, or use \`@BatchSize(size = 50)\`.`;
+  }
+
+  if (normalized.includes('hashmap') || normalized.includes('concurrenthashmap') || normalized.includes('hashcode')) {
+    return `Java HashMap & ConcurrentHashMap Follow-Up:
+• ConcurrentHashMap forbids null keys and null values to eliminate ambiguity in concurrent \`get(key)\` checks (since another thread could modify the map between \`containsKey\` and \`get\`).
+• In Java 8+, ConcurrentHashMap uses fine-grained \`CAS\` on empty buckets and \`synchronized\` on only the head node of a single bucket, plus \`TREEIFY_THRESHOLD = 8\` Red-Black trees.`;
+  }
+
+  if (normalized.includes('innodb') || normalized.includes('uuid') || normalized.includes('explain') || normalized.includes('idempotency')) {
+    return `MySQL InnoDB & Backend Architecture Follow-Up:
+• InnoDB clusters rows physically by Primary Key inside a B+Tree. Random UUIDv4 inserts land in arbitrary pages, causing B+Tree page splits, fragmentation, and poor buffer pool locality—prefer sequential BIGINT or time-ordered UUIDv7.
+• For parallel Idempotency-Key requests, enforce a \`UNIQUE\` constraint on \`(user_id, idempotency_key)\` in MySQL so the second request catches \`DataIntegrityViolationException\` cleanly instead of double-charging.`;
+  }
+
+  if (
+    normalized.includes('finish my profile') ||
+    normalized.includes('profile completion') ||
+    normalized.includes('missing sections') ||
+    (normalized.includes('work history') && normalized.includes('education'))
+  ) {
+    const tips: string[] = [];
+    if (normalized.includes('work history')) {
+      tips.push(
+        '• Work History: Add 2 impact-focused entries (e.g., Software Engineering Intern or Open-Source Project Lead). Structure each bullet as Action Verb + Tech Stack + Measurable Result — e.g., "Architected Spring Boot 3 REST APIs with MySQL indexing, reducing p95 latency by 28%."'
+      );
+    }
+    if (normalized.includes('skills')) {
+      tips.push(
+        '• Skills: Expand beyond core Java/React to include ecosystem tooling sought by hiring pipelines — add `docker`, `kubernetes`, `rest-api`, `microservices`, `git`, and `sql`.'
+      );
+    }
+    if (normalized.includes('education')) {
+      tips.push(
+        '• Education: Include your full degree title, university, graduation timeline, CGPA (e.g., 8.9/10), and 3–4 relevant CS courses (Data Structures & Algorithms, DBMS, Distributed Systems, Spring Boot).'
+      );
+    }
+    if (tips.length === 0) {
+      tips.push(
+        '• Final Recruiter Polish: Quantify impact metrics in your latest work role, align top 8 skills with your target Full-Stack/Java JD, and verify your Education CGPA and coursework are visible.'
+      );
+    }
+    return `Personalized AI Profile Completion Plan:\n${tips.join('\n')}\n• Quick Shortcut: Use "Sync from LinkedIn" in Profile & Settings or copy these tailored bullets directly into your Work Experience, Skills, and Education fields.`;
+  }
+
+  if (normalized.includes('spring boot') || normalized.includes('springboot') || normalized.includes('java') || normalized.includes('spring')) {
+    if (!normalized.includes('first job') && !normalized.includes('career path')) {
+      return `Spring Boot & Java Technical Guidance on JobNova:
+• Review your @SpringBootApplication auto-configuration, constructor DI, @Transactional AOP boundaries, and @RestControllerAdvice error contracts in the Cheat Sheet tab.
+• Practice explaining concrete trade-offs (e.g., JPA FetchType.LAZY vs JOIN FETCH, HikariCP pool sizing, and CompletableFuture custom Executors) tailored to your applied TCS & backend roles.`;
+    }
   }
 
   for (const [keyword, answer] of Object.entries(CAREER_KNOWLEDGE_BASE)) {
@@ -234,7 +303,53 @@ const SKILL_DISPLAY_NAMES: Record<string, string> = {
   ai: 'AI / LLM',
   ml: 'Machine Learning',
   linux: 'Linux',
-  devops: 'DevOps'
+  devops: 'DevOps',
+  genai: 'GenAI',
+  llm: 'LLMs',
+  langchain: 'LangChain',
+  rag: 'RAG',
+  fastapi: 'FastAPI',
+  vectordb: 'Vector DB',
+  openai: 'OpenAI API',
+  pytorch: 'PyTorch',
+  huggingface: 'Hugging Face',
+  mlflow: 'MLflow',
+  airflow: 'Apache Airflow',
+  golang: 'Go (Golang)',
+  grpc: 'gRPC',
+  kafka: 'Apache Kafka',
+  postgresql: 'PostgreSQL',
+  redis: 'Redis',
+  rust: 'Rust',
+  tokio: 'Tokio',
+  django: 'Django',
+  terraform: 'Terraform',
+  prometheus: 'Prometheus',
+  grafana: 'Grafana',
+  azure: 'Microsoft Azure',
+  gcp: 'Google Cloud (GCP)',
+  microservices: 'Microservices',
+  spark: 'Apache Spark',
+  dbt: 'dbt',
+  snowflake: 'Snowflake',
+  pandas: 'Pandas',
+  tableau: 'Tableau',
+  playwright: 'Playwright',
+  selenium: 'Selenium',
+  typescript: 'TypeScript',
+  restassured: 'REST Assured',
+  cicd: 'CI/CD',
+  testing: 'QA Automation',
+  cybersecurity: 'Cybersecurity',
+  iam: 'Cloud IAM',
+  siem: 'SIEM',
+  networking: 'Networking',
+  'react-native': 'React Native',
+  ios: 'iOS',
+  android: 'Android',
+  'rest-api': 'REST APIs',
+  nodejs: 'Node.js',
+  nextjs: 'Next.js'
 };
 
 // Base student proficiency scores (out of 100) for common student skills, boosted by enrolled courses & certs
@@ -256,7 +371,24 @@ const BASE_STUDENT_PROFICIENCY: Record<string, number> = {
   ai: 65,
   ml: 62,
   linux: 70,
-  devops: 56
+  devops: 56,
+  genai: 60,
+  llm: 58,
+  langchain: 52,
+  rag: 54,
+  fastapi: 62,
+  golang: 50,
+  postgresql: 66,
+  redis: 58,
+  rust: 42,
+  terraform: 50,
+  spark: 48,
+  snowflake: 46,
+  playwright: 60,
+  typescript: 70,
+  cybersecurity: 54,
+  nodejs: 68,
+  nextjs: 64
 };
 
 // Industry standard proficiency benchmark (out of 100) when a skill is required by saved/target job roles
@@ -278,7 +410,24 @@ const INDUSTRY_BENCHMARK_BY_SKILL: Record<string, number> = {
   ai: 85,
   ml: 85,
   linux: 78,
-  devops: 82
+  devops: 82,
+  genai: 84,
+  llm: 84,
+  langchain: 80,
+  rag: 82,
+  fastapi: 80,
+  golang: 84,
+  postgresql: 82,
+  redis: 78,
+  rust: 86,
+  terraform: 82,
+  spark: 84,
+  snowflake: 80,
+  playwright: 80,
+  typescript: 82,
+  cybersecurity: 85,
+  nodejs: 80,
+  nextjs: 80
 };
 
 /**
@@ -379,6 +528,19 @@ export interface ResumeDocumentData {
   enrolledCourses: { title: string; provider: string; level: string }[];
   targetRoles: { title: string; company: string; location: string }[];
   generatedDate: string;
+  template?: 'classic' | 'modern' | 'compact';
+  phone?: string;
+  linkedInProfileUrl?: string;
+  githubOrPortfolioUrl?: string;
+  educationEntries?: {
+    id: string;
+    degree: string;
+    institution: string;
+    period: string;
+    highlights?: string;
+  }[];
+  experiences?: WorkExperienceItem[];
+  showSkillProficiencyBars?: boolean;
 }
 
 /**
@@ -2619,6 +2781,69 @@ export function buildLinkedInShareUrl(
   return linkedInEndpoint.toString();
 }
 
+export interface JobShareLinks {
+  targetUrl: string;
+  summaryText: string;
+  linkedinUrl: string;
+  twitterUrl: string;
+  whatsappUrl: string;
+  emailUrl: string;
+}
+
+/**
+ * Builds multi-channel share links (Twitter/X, WhatsApp, Email, LinkedIn) for a job listing.
+ */
+export function buildJobShareLinks(
+  item: LinkedInShareOpportunityPayload,
+  baseUrl = 'https://jobnova.career'
+): JobShareLinks {
+  const shareTargetUrl = new URL(baseUrl);
+  shareTargetUrl.searchParams.set('role', item.title);
+  shareTargetUrl.searchParams.set('company', item.company);
+  if (item.type) shareTargetUrl.searchParams.set('type', item.type);
+  if (item.location) shareTargetUrl.searchParams.set('location', item.location);
+
+  const targetUrl = shareTargetUrl.toString();
+  const compLabel = item.company?.trim() || 'Tech';
+  const roleLabel = item.title?.trim() || 'Software Engineer';
+  const locationPart = item.location?.trim() ? ` (${item.location})` : '';
+  const packagePart = item.ctc
+    ? ` · ${item.ctc}`
+    : item.stipend
+    ? ` · ${item.stipend}`
+    : '';
+  const skillsPart = item.skills?.trim()
+    ? ` | Stack: ${item.skills
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .slice(0, 5)
+        .join(', ')}`
+    : '';
+
+  const summaryText = `Check out this ${roleLabel} role at ${compLabel}${locationPart}${packagePart}${skillsPart} on JobNova:`;
+
+  const twitterEndpoint = new URL('https://twitter.com/intent/tweet');
+  twitterEndpoint.searchParams.set('text', summaryText);
+  twitterEndpoint.searchParams.set('url', targetUrl);
+
+  const whatsappEndpoint = new URL('https://wa.me/');
+  whatsappEndpoint.searchParams.set('text', `${summaryText} ${targetUrl}`);
+
+  const emailSubject = `${roleLabel} Opportunity at ${compLabel}${locationPart}`;
+  const emailBody = `${summaryText}\n\n${targetUrl}\n\nShared via JobNova Career Platform`;
+  const emailUrl = `mailto:?subject=${encodeURIComponent(emailSubject)}&body=${encodeURIComponent(emailBody)}`;
+
+  return {
+    targetUrl,
+    summaryText,
+    linkedinUrl: buildLinkedInShareUrl(item, baseUrl),
+    twitterUrl: twitterEndpoint.toString(),
+    whatsappUrl: whatsappEndpoint.toString(),
+    emailUrl
+  };
+}
+
 export type LinkedInConnectionHealthStatus = 'Healthy' | 'Stale' | 'Disconnected';
 
 export interface LinkedInConnectionHealth {
@@ -2748,4 +2973,286 @@ export function computeLinkedInConnectionHealth(params: {
     isOnline: true,
     actionRecommendation: 'LinkedIn connection is active and healthy.'
   };
+}
+
+export interface LinkedInSyncPayload {
+  provider: 'LinkedIn';
+  source: string;
+  headline: string;
+  summary: string;
+  education: string;
+  workHistory: WorkExperienceItem[];
+  skills: string[];
+  linkedInProfileUrl: string;
+}
+
+export interface LinkedInSyncResult {
+  user: UserProfile;
+  addedSkillsCount: number;
+  syncedRolesCount: number;
+  educationUpdated: boolean;
+  syncedAt: string;
+  syncedFields: string[];
+}
+
+/**
+ * Builds the deterministic LinkedIn mock API payload containing work history,
+ * skills, education details, headline, and summary.
+ */
+export function buildMockLinkedInProfilePayload(): LinkedInSyncPayload {
+  return {
+    provider: 'LinkedIn',
+    source: 'mock-linkedin-api-v2',
+    headline: SEED_LINKEDIN_HEADLINE,
+    summary: SEED_LINKEDIN_PROFILE_SUMMARY,
+    education: SEED_LINKEDIN_EDUCATION,
+    workHistory: SEED_LINKEDIN_WORK_HISTORY.map((item) => ({
+      ...item,
+      skillsUsed: item.skillsUsed ? [...item.skillsUsed] : []
+    })),
+    skills: [...SEED_LINKEDIN_SKILLS],
+    linkedInProfileUrl: 'https://linkedin.com/in/harish-ragavendran'
+  };
+}
+
+/**
+ * Applies a fetched LinkedIn sync payload to a UserProfile and reports
+ * exactly which fields and counts were updated.
+ */
+export function applyLinkedInSyncPayload(
+  currentProfile: UserProfile,
+  payload: Partial<LinkedInSyncPayload> = buildMockLinkedInProfilePayload()
+): LinkedInSyncResult {
+  const prevSkillSet = new Set(
+    (currentProfile.skills || []).map((s) => s.trim().toLowerCase()).filter(Boolean)
+  );
+  const prevEducation = (currentProfile.education || '').trim();
+
+  const merged = importLinkedInProfileData(currentProfile, {
+    headline: payload.headline || SEED_LINKEDIN_HEADLINE,
+    summary: payload.summary || SEED_LINKEDIN_PROFILE_SUMMARY,
+    education: payload.education || SEED_LINKEDIN_EDUCATION,
+    workHistory: payload.workHistory || SEED_LINKEDIN_WORK_HISTORY,
+    skills: payload.skills || SEED_LINKEDIN_SKILLS,
+    linkedInProfileUrl:
+      payload.linkedInProfileUrl || 'https://linkedin.com/in/harish-ragavendran'
+  });
+
+  const addedSkillsCount = merged.skills.filter((s) => !prevSkillSet.has(s)).length;
+  const syncedRolesCount = (payload.workHistory || SEED_LINKEDIN_WORK_HISTORY).length;
+  const educationUpdated = (merged.education || '').trim() !== prevEducation;
+
+  return {
+    user: merged,
+    addedSkillsCount,
+    syncedRolesCount,
+    educationUpdated,
+    syncedAt: merged.lastLinkedInSync || new Date().toISOString(),
+    syncedFields: ['workHistory', 'skills', 'education', 'headline', 'summary']
+  };
+}
+
+export type ProfileSectionStatus = 'complete' | 'partial' | 'missing';
+
+export interface ProfileCompletionSectionItem {
+  key: 'workHistory' | 'skills' | 'education';
+  label: string;
+  earnedPoints: number;
+  maxPoints: number;
+  status: ProfileSectionStatus;
+  hint: string;
+}
+
+export interface ProfileCompletionResult {
+  percentage: number;
+  completedSectionsCount: number;
+  totalSectionsCount: number;
+  missingSectionLabels: string[];
+  sections: ProfileCompletionSectionItem[];
+  statusMessage: string;
+}
+
+/**
+ * Computes profile completion percentage across Work History (35%),
+ * Skills (35%), and Education (30%), highlighting missing or partial details.
+ */
+export function computeProfileCompletionProgress(params: {
+  workHistory?: WorkExperienceItem[];
+  skills?: string[];
+  education?: string;
+}): ProfileCompletionResult {
+  const workItems = Array.isArray(params.workHistory) ? params.workHistory : [];
+  const skillsList = Array.isArray(params.skills)
+    ? params.skills.map((s) => s.trim()).filter(Boolean)
+    : [];
+  const eduText = (params.education || '').trim();
+
+  // 1. Work History (35 pts max)
+  let workPoints = 0;
+  let workStatus: ProfileSectionStatus = 'missing';
+  let workHint = 'Add 1+ internship or project role (or sync LinkedIn)';
+  if (workItems.length >= 2) {
+    const detailedCount = workItems.filter((w) => (w.description || '').trim().length >= 20).length;
+    if (detailedCount >= 2) {
+      workPoints = 35;
+      workStatus = 'complete';
+      workHint = `${workItems.length} roles with achievements logged`;
+    } else {
+      workPoints = 26;
+      workStatus = 'partial';
+      workHint = 'Add quantified achievements to your work roles';
+    }
+  } else if (workItems.length === 1) {
+    workPoints = 20;
+    workStatus = 'partial';
+    workHint = '1 role logged — add 1+ internship or project leadership role';
+  }
+
+  // 2. Skills (35 pts max)
+  let skillPoints = 0;
+  let skillStatus: ProfileSectionStatus = 'missing';
+  let skillHint = 'List your core languages, frameworks & databases';
+  if (skillsList.length >= 9) {
+    skillPoints = 35;
+    skillStatus = 'complete';
+    skillHint = `${skillsList.length} verified stack skills listed`;
+  } else if (skillsList.length >= 5) {
+    skillPoints = 25;
+    skillStatus = 'partial';
+    skillHint = `${skillsList.length} skills — add Docker, REST APIs, or Git (9+ recommended)`;
+  } else if (skillsList.length >= 1) {
+    skillPoints = 15;
+    skillStatus = 'partial';
+    skillHint = `Only ${skillsList.length} skills — add core stack & tooling`;
+  }
+
+  // 3. Education (30 pts max)
+  let eduPoints = 0;
+  let eduStatus: ProfileSectionStatus = 'missing';
+  let eduHint = 'Add degree, university, years, CGPA & coursework';
+  if (eduText.length >= 15) {
+    const hasGpaOrCoursework =
+      /cgpa|gpa|%|coursework|honors|distinction/i.test(eduText);
+    if (hasGpaOrCoursework) {
+      eduPoints = 30;
+      eduStatus = 'complete';
+      eduHint = 'Degree, institution, CGPA/coursework complete';
+    } else {
+      eduPoints = 18;
+      eduStatus = 'partial';
+      eduHint = 'Add CGPA/GPA & core CS coursework';
+    }
+  }
+
+  const sections: ProfileCompletionSectionItem[] = [
+    {
+      key: 'workHistory',
+      label: 'Work History',
+      earnedPoints: workPoints,
+      maxPoints: 35,
+      status: workStatus,
+      hint: workHint
+    },
+    {
+      key: 'skills',
+      label: 'Skills',
+      earnedPoints: skillPoints,
+      maxPoints: 35,
+      status: skillStatus,
+      hint: skillHint
+    },
+    {
+      key: 'education',
+      label: 'Education',
+      earnedPoints: eduPoints,
+      maxPoints: 30,
+      status: eduStatus,
+      hint: eduHint
+    }
+  ];
+
+  const percentage = Math.min(100, Math.max(0, workPoints + skillPoints + eduPoints));
+  const completedSectionsCount = sections.filter((s) => s.status === 'complete').length;
+  const missingSectionLabels = sections
+    .filter((s) => s.status !== 'complete')
+    .map((s) => s.label);
+
+  const statusMessage =
+    percentage === 100
+      ? 'All core profile sections (Work History, Skills, Education) are 100% complete.'
+      : `${completedSectionsCount} of ${sections.length} core sections complete · Needs attention: ${missingSectionLabels.join(', ')}`;
+
+  return {
+    percentage,
+    completedSectionsCount,
+    totalSectionsCount: sections.length,
+    missingSectionLabels,
+    sections,
+    statusMessage
+  };
+}
+
+/**
+ * Generates a structured prompt for the AI Career Assistant asking for
+ * help filling in the missing or incomplete profile sections.
+ */
+export function buildFinishProfileAiPrompt(
+  completion: ProfileCompletionResult,
+  profile?: {
+    name?: string;
+    headline?: string;
+    skills?: string[];
+    education?: string;
+    workHistory?: WorkExperienceItem[];
+  }
+): string {
+  const stack = (profile?.skills || []).slice(0, 8).join(', ') || 'Java, Spring Boot, React.js, MySQL';
+  if (completion.missingSectionLabels.length === 0) {
+    return `My JobNova profile completion is at ${completion.percentage}% across Work History, Skills, and Education (stack: ${stack}). Help me polish my profile with recruiter-grade impact metrics and bullet improvements.`;
+  }
+
+  const missingDetails = completion.sections
+    .filter((s) => s.status !== 'complete')
+    .map((s) => `${s.label} (${s.earnedPoints}/${s.maxPoints}% — ${s.hint})`)
+    .join('; ');
+
+  return `Help me finish my profile! My profile completion is currently ${completion.percentage}%. Please suggest specific, copy-ready entries for these missing sections: ${missingDetails}. My current headline is "${profile?.headline || 'Full-Stack Developer'}" and current skills are: ${stack}.`;
+}
+
+/**
+ * Normalizes persisted bookmarked job IDs from storage into unique positive integers.
+ */
+export function normalizeSavedJobIds(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<number>();
+  const normalized: number[] = [];
+  for (const item of raw) {
+    const num = typeof item === 'number' ? item : Number(item);
+    if (Number.isInteger(num) && num > 0 && !seen.has(num)) {
+      seen.add(num);
+      normalized.push(num);
+    }
+  }
+  return normalized;
+}
+
+/**
+ * Filters jobs by skill/keyword, location, and optional Saved Jobs bookmark toggle.
+ * Keeps bookmarked jobs strictly independent from appliedJobIds.
+ */
+export function filterJobsList(
+  jobs: JobItem[],
+  options: {
+    query: string;
+    locationFilter?: string;
+    onlySaved?: boolean;
+    savedJobIds?: number[];
+  }
+): JobItem[] {
+  const base = filterJobsBySkill(jobs, options.query, options.locationFilter || 'ALL');
+  if (!options.onlySaved) {
+    return base;
+  }
+  const savedSet = new Set(options.savedJobIds || []);
+  return base.filter((job) => savedSet.has(job.id));
 }

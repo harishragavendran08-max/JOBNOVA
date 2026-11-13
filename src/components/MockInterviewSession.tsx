@@ -22,7 +22,7 @@ import {
   Zap
 } from 'lucide-react';
 import { JobItem, SEED_JOBS } from '../data/seedData';
-import { ProficiencyTier } from '../utils/jobnovaLogic';
+import { InterviewConfidenceRating, ProficiencyTier } from '../utils/jobnovaLogic';
 import {
   completeMockInterviewSession,
   computeSessionProgress,
@@ -48,7 +48,7 @@ interface MockInterviewSessionProps {
     interviewerOrFormat: string;
     questionsAsked: string;
     keyTakeaways: string;
-    confidenceRating: 'Strong' | 'Average' | 'Needs Practice';
+    confidenceRating: InterviewConfidenceRating;
   }) => void;
 }
 
@@ -230,9 +230,9 @@ export const MockInterviewSession: React.FC<MockInterviewSessionProps> = ({
     if (!onLogFeedback || !currentSession.evaluation) return;
     const evalData = currentSession.evaluation;
 
-    let rating: 'Strong' | 'Average' | 'Needs Practice' = 'Average';
+    let rating: InterviewConfidenceRating = 'Moderate';
     if (evalData.overallScore >= 75) rating = 'Strong';
-    else if (evalData.overallScore < 55) rating = 'Needs Practice';
+    else if (evalData.overallScore < 55) rating = 'Needs Review';
 
     onLogFeedback({
       jobId: currentSession.jobId,
@@ -279,12 +279,12 @@ export const MockInterviewSession: React.FC<MockInterviewSessionProps> = ({
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md text-[11px] font-mono font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80">
-                <Sparkles className="w-3.5 h-3.5 text-indigo-500" />
+              <span className="inline-flex items-center gap-1.5 text-xs font-mono font-bold text-[#2557A7] dark:text-blue-400">
+                <Sparkles className="w-3.5 h-3.5" />
                 GEMINI AI INTERVIEW SIMULATOR
               </span>
               <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                Real-Time Speech &amp; Coding Questions
+                · Real-Time Speech &amp; Coding Questions
               </span>
             </div>
             <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
@@ -302,7 +302,7 @@ export const MockInterviewSession: React.FC<MockInterviewSessionProps> = ({
               onClick={() => setActiveTab('session')}
               className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                 activeTab === 'session'
-                  ? 'bg-indigo-600 text-white shadow-xs'
+                  ? 'bg-[#2557A7] text-white dark:bg-blue-600'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
@@ -314,7 +314,7 @@ export const MockInterviewSession: React.FC<MockInterviewSessionProps> = ({
               onClick={() => setActiveTab('history')}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
                 activeTab === 'history'
-                  ? 'bg-indigo-600 text-white shadow-xs'
+                  ? 'bg-[#2557A7] text-white dark:bg-blue-600'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
               }`}
             >
@@ -680,7 +680,7 @@ export const MockInterviewSession: React.FC<MockInterviewSessionProps> = ({
                   data-testid="evaluate-session-gemini-btn"
                   onClick={handleEvaluateWithGemini}
                   disabled={isEvaluating}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 disabled:opacity-60 rounded-xl transition-all shadow-xs cursor-pointer"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-white bg-[#2557A7] hover:bg-[#164081] dark:bg-blue-600 dark:hover:bg-blue-500 disabled:opacity-60 rounded-lg transition-colors cursor-pointer"
                 >
                   {isEvaluating ? (
                     <>
@@ -689,7 +689,7 @@ export const MockInterviewSession: React.FC<MockInterviewSessionProps> = ({
                     </>
                   ) : (
                     <>
-                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      <Sparkles className="w-3.5 h-3.5 text-blue-200" />
                       <span>Evaluate All Responses with Gemini</span>
                     </>
                   )}
@@ -706,11 +706,11 @@ export const MockInterviewSession: React.FC<MockInterviewSessionProps> = ({
                 {/* Header Score & Verdict */}
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4 p-5 rounded-xl bg-slate-50 dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 items-center">
                   <div className="md:col-span-4 flex items-center gap-4">
-                    <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-violet-600 text-white flex flex-col items-center justify-center font-bold shadow-xs">
+                    <div className="w-16 h-16 rounded-xl bg-[#2557A7] text-white flex flex-col items-center justify-center font-bold">
                       <span className="text-2xl font-mono leading-none">
                         {currentSession.evaluation.overallScore}%
                       </span>
-                      <span className="text-[10px] uppercase font-sans tracking-wider text-indigo-200 mt-1">
+                      <span className="text-[10px] uppercase font-sans tracking-wider text-blue-100 mt-1">
                         Readiness
                       </span>
                     </div>

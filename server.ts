@@ -11,8 +11,10 @@ import {
   SEED_COURSES,
   SEED_INTERNSHIPS,
   SEED_JOBS,
+  SEED_LINKEDIN_EDUCATION,
   SEED_LINKEDIN_HEADLINE,
   SEED_LINKEDIN_PROFILE_SUMMARY,
+  SEED_LINKEDIN_SKILLS,
   SEED_LINKEDIN_WORK_HISTORY,
   SPRING_BOOT_DIAGNOSTICS,
   UserProfile,
@@ -20,6 +22,8 @@ import {
   WorkExperienceItem
 } from './src/data/seedData.ts';
 import {
+  applyLinkedInSyncPayload,
+  buildMockLinkedInProfilePayload,
   disconnectLinkedInProfile,
   filterJobsBySkill,
   importLinkedInProfileData,
@@ -29,6 +33,11 @@ import {
   evaluateMockSessionOffline,
   MockInterviewSession
 } from './src/utils/mockInterviewLogic.ts';
+import {
+  buildUserProfileFromSignUp,
+  validateLoginInput,
+  validateSignUpInput
+} from './src/utils/authLogic.ts';
 
 dotenv.config();
 
@@ -44,6 +53,16 @@ let coursesStore = [...SEED_COURSES];
 let certificationsStore = [...SEED_CERTIFICATIONS];
 let currentUser: UserProfile | null = { ...DEFAULT_USER_PROFILE };
 let currentSettings: UserSettings = { ...DEFAULT_USER_SETTINGS };
+let nextUserId = 2;
+const registeredAccounts = new Map<string, { profile: UserProfile; password: string }>([
+  [
+    DEFAULT_USER_PROFILE.email.toLowerCase(),
+    {
+      profile: { ...DEFAULT_USER_PROFILE },
+      password: 'JobNova@2026'
+    }
+  ]
+]);
 
 function getGeminiClient(): GoogleGenAI | null {
   const apiKey = process.env.GEMINI_API_KEY;
@@ -125,8 +144,80 @@ async function startServer() {
     });
   });
 
+  app.post('/api/auth/signup', (req, res) => {
+    const name = typeof req.body?.name === 'string' ? req.body.name : '';
+    const email = typeof req.body?.email === 'string' ? req.body.email : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    const confirmPassword =
+      typeof req.body?.confirmPassword === 'string' ? req.body.confirmPassword : password;
+    const acceptTerms = req.body?.acceptTerms !== undefined ? Boolean(req.body.acceptTerms) : true;
+    const trackId = typeof req.body?.trackId === 'string' ? req.body.trackId : undefined;
+    const location = typeof req.body?.location === 'string' ? req.body.location : undefined;
+
+    const validation = validateSignUpInput({
+      name,
+      email,
+      password,
+      confirmPassword,
+      acceptTerms
+    });
+    if (!validation.valid) {
+      res.status(400).json({ authenticated: false, error: validation.error });
+      return;
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    if (registeredAccounts.has(normalizedEmail)) {
+      res.status(409).json({
+        authenticated: false,
+        error: 'An account with this email already exists. Please log in instead.'
+      });
+      return;
+    }
+
+    const newProfile = buildUserProfileFromSignUp({
+      id: nextUserId++,
+      name,
+      email: normalizedEmail,
+      trackId,
+      location
+    });
+    registeredAccounts.set(normalizedEmail, {
+      profile: newProfile,
+      password
+    });
+    currentUser = { ...newProfile };
+
+    res.status(201).json({ authenticated: true, user: currentUser });
+  });
+
   app.post('/api/auth/login', (req, res) => {
-    const provider = req.body?.provider || 'Google';
+    const provider = req.body?.provider || (req.body?.email ? 'Email' : 'Google');
+
+    if (provider === 'Email') {
+      const email = typeof req.body?.email === 'string' ? req.body.email : '';
+      const password = typeof req.body?.password === 'string' ? req.body.password : '';
+      const validation = validateLoginInput({ email, password });
+      if (!validation.valid) {
+        res.status(400).json({ authenticated: false, error: validation.error });
+        return;
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+      const account = registeredAccounts.get(normalizedEmail);
+      if (!account || account.password !== password) {
+        res.status(401).json({
+          authenticated: false,
+          error: 'Invalid email or password. Try the demo credentials or create a new account.'
+        });
+        return;
+      }
+
+      currentUser = { ...account.profile };
+      res.json({ authenticated: true, user: currentUser });
+      return;
+    }
+
     if (provider === 'GitHub') {
       currentUser = {
         ...DEFAULT_USER_PROFILE,
@@ -180,8 +271,9 @@ async function startServer() {
       profile: {
         headline: SEED_LINKEDIN_HEADLINE,
         summary: SEED_LINKEDIN_PROFILE_SUMMARY,
+        education: SEED_LINKEDIN_EDUCATION,
         workHistory: SEED_LINKEDIN_WORK_HISTORY,
-        skills: ['docker', 'kubernetes', 'rest-api', 'agile', 'git'],
+        skills: SEED_LINKEDIN_SKILLS,
         linkedInProfileUrl: 'https://linkedin.com/in/harish-ragavendran'
       }
     };
@@ -237,14 +329,16 @@ async function startServer() {
     const importPayload = req.body || {};
     const headline = importPayload.headline || SEED_LINKEDIN_HEADLINE;
     const summary = importPayload.summary || SEED_LINKEDIN_PROFILE_SUMMARY;
+    const education = importPayload.education || SEED_LINKEDIN_EDUCATION;
     const workHistory = importPayload.workHistory || SEED_LINKEDIN_WORK_HISTORY;
-    const skills = importPayload.skills || ['docker', 'kubernetes', 'rest-api'];
+    const skills = importPayload.skills || SEED_LINKEDIN_SKILLS;
     const linkedInProfileUrl = importPayload.linkedInProfileUrl || 'https://linkedin.com/in/harish-ragavendran';
 
     const baseProfile = currentUser || DEFAULT_USER_PROFILE;
     currentUser = importLinkedInProfileData(baseProfile, {
       headline,
       summary,
+      education,
       workHistory,
       skills,
       linkedInProfileUrl
@@ -253,8 +347,44 @@ async function startServer() {
     res.json({
       authenticated: true,
       success: true,
-      message: 'LinkedIn work history and professional summary imported successfully!',
+      message: 'LinkedIn work history, skills, and education details imported successfully!',
       user: currentUser
+    });
+  });
+
+  // Dedicated Mock LinkedIn Profile Sync API Endpoint
+  app.get('/api/linkedin/sync', (_req, res) => {
+    const linkedInProfile = buildMockLinkedInProfilePayload();
+    res.json({
+      success: true,
+      ...linkedInProfile
+    });
+  });
+
+  app.post('/api/linkedin/sync', (req, res) => {
+    const linkedInProfile = buildMockLinkedInProfilePayload();
+    const baseProfile: UserProfile = req.body?.currentProfile
+      ? {
+          ...(currentUser || DEFAULT_USER_PROFILE),
+          ...req.body.currentProfile
+        }
+      : currentUser || DEFAULT_USER_PROFILE;
+
+    const syncResult = applyLinkedInSyncPayload(baseProfile, linkedInProfile);
+    currentUser = syncResult.user;
+
+    res.json({
+      authenticated: true,
+      success: true,
+      source: linkedInProfile.source,
+      syncedAt: syncResult.syncedAt,
+      syncedFields: syncResult.syncedFields,
+      addedSkillsCount: syncResult.addedSkillsCount,
+      syncedRolesCount: syncResult.syncedRolesCount,
+      educationUpdated: syncResult.educationUpdated,
+      linkedInProfile,
+      user: currentUser,
+      message: `Synced ${syncResult.syncedRolesCount} work roles, ${syncResult.addedSkillsCount} new skills, and education details from LinkedIn.`
     });
   });
 

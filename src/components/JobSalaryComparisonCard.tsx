@@ -60,8 +60,8 @@ export const JobSalaryComparisonCard: React.FC<JobSalaryComparisonCardProps> = (
   };
 
   const getBarColor = (name: string, category: string) => {
-    if (name === 'Saved Jobs Avg') return '#4f46e5'; // Indigo-600
-    if (category === 'Expected Range') return '#0d9488'; // Teal-600
+    if (name === 'Saved Jobs Avg') return '#2557A7'; // Indeed Cobalt Blue
+    if (category === 'Expected Range') return '#087F31'; // Glassdoor Emerald
     if (name === 'Market Avg (20)') return '#64748b'; // Slate-500
     return '#d97706'; // Amber-600 for individual saved company roles
   };
@@ -76,7 +76,7 @@ export const JobSalaryComparisonCard: React.FC<JobSalaryComparisonCardProps> = (
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-slate-200 dark:border-slate-800">
         <div className="space-y-1">
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+            <span className="font-semibold text-[#2557A7] dark:text-blue-400">
               Compensation Benchmark
             </span>
             <span aria-hidden="true">·</span>
@@ -89,7 +89,7 @@ export const JobSalaryComparisonCard: React.FC<JobSalaryComparisonCardProps> = (
             <span aria-hidden="true">·</span>
             <span>
               Expected Range:{' '}
-              <span className="font-mono font-semibold text-teal-600 dark:text-teal-400 tabular-nums">
+              <span className="font-mono font-semibold text-[#087F31] dark:text-emerald-400 tabular-nums">
                 {summary.expectedMinLpa} – {summary.expectedMaxLpa} LPA
               </span>
             </span>
@@ -162,23 +162,23 @@ export const JobSalaryComparisonCard: React.FC<JobSalaryComparisonCardProps> = (
                 />
                 <ReferenceLine
                   y={summary.expectedMinLpa}
-                  stroke="#0d9488"
+                  stroke="#087F31"
                   strokeDasharray="4 4"
                   label={{
                     value: `Min (${summary.expectedMinLpa}L)`,
                     position: 'insideTopRight',
-                    fill: isDarkMode ? '#2dd4bf' : '#0f766e',
+                    fill: isDarkMode ? '#34d399' : '#087F31',
                     fontSize: 10
                   }}
                 />
                 <ReferenceLine
                   y={summary.expectedMaxLpa}
-                  stroke="#0d9488"
+                  stroke="#087F31"
                   strokeDasharray="4 4"
                   label={{
                     value: `Max (${summary.expectedMaxLpa}L)`,
                     position: 'insideTopRight',
-                    fill: isDarkMode ? '#2dd4bf' : '#0f766e',
+                    fill: isDarkMode ? '#34d399' : '#087F31',
                     fontSize: 10
                   }}
                 />
@@ -197,11 +197,11 @@ export const JobSalaryComparisonCard: React.FC<JobSalaryComparisonCardProps> = (
           {/* Color Legend */}
           <div className="flex flex-wrap items-center justify-center gap-5 text-xs text-slate-600 dark:text-slate-400 pt-1">
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-xs bg-indigo-600 inline-block" />
+              <span className="w-3 h-3 rounded-xs bg-[#2557A7] inline-block" />
               <span>Saved Applications Avg ({summary.savedJobsAverageLpa} LPA)</span>
             </div>
             <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-xs bg-teal-600 inline-block" />
+              <span className="w-3 h-3 rounded-xs bg-[#087F31] inline-block" />
               <span>Expected Salary Range ({summary.expectedMinLpa}–{summary.expectedMaxLpa} LPA)</span>
             </div>
             <div className="flex items-center gap-1.5">
@@ -221,13 +221,13 @@ export const JobSalaryComparisonCard: React.FC<JobSalaryComparisonCardProps> = (
           <div className="grid grid-cols-3 gap-3 pb-4 border-b border-slate-200 dark:border-slate-800">
             <div>
               <div className="text-[11px] text-slate-500 dark:text-slate-400">Saved Avg CTC</div>
-              <div className="text-lg font-bold font-mono tabular-nums text-indigo-600 dark:text-indigo-400">
+              <div className="text-lg font-bold font-mono tabular-nums text-[#2557A7] dark:text-blue-400">
                 {summary.savedJobsAverageLpa} LPA
               </div>
             </div>
             <div>
               <div className="text-[11px] text-slate-500 dark:text-slate-400">Expected Band</div>
-              <div className="text-lg font-bold font-mono tabular-nums text-teal-600 dark:text-teal-400">
+              <div className="text-lg font-bold font-mono tabular-nums text-[#087F31] dark:text-emerald-400">
                 {summary.expectedMinLpa}–{summary.expectedMaxLpa}L
               </div>
             </div>

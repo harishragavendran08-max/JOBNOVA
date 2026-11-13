@@ -88,7 +88,7 @@ export const SkillProficiencyRadarCard: React.FC<SkillProficiencyRadarCardProps>
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-slate-200 dark:border-slate-800">
         <div className="space-y-1">
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <span className="font-semibold text-indigo-600 dark:text-indigo-400">
+            <span className="font-semibold text-[#2557A7] dark:text-blue-400">
               Competency Benchmark
             </span>
             <span aria-hidden="true">·</span>
@@ -174,10 +174,10 @@ export const SkillProficiencyRadarCard: React.FC<SkillProficiencyRadarCardProps>
                 <Radar
                   name="Student Proficiency"
                   dataKey="studentProficiency"
-                  stroke="#4f46e5"
+                  stroke="#2557A7"
                   strokeWidth={2.5}
-                  fill="#4f46e5"
-                  fillOpacity={0.32}
+                  fill="#2557A7"
+                  fillOpacity={0.28}
                 />
                 <Radar
                   name="Industry Standard (Saved Roles)"
@@ -217,7 +217,7 @@ export const SkillProficiencyRadarCard: React.FC<SkillProficiencyRadarCardProps>
               <div className="text-[11px] text-slate-500 dark:text-slate-400">
                 Avg. Student Score
               </div>
-              <div className="text-lg font-bold font-mono tabular-nums text-indigo-600 dark:text-indigo-400">
+              <div className="text-lg font-bold font-mono tabular-nums text-[#2557A7] dark:text-blue-400">
                 {averageProficiency}%
               </div>
             </div>
@@ -289,9 +289,9 @@ export const SkillProficiencyRadarCard: React.FC<SkillProficiencyRadarCardProps>
                       value={row.studentProficiency}
                       aria-label={`Adjust ${row.skill} proficiency`}
                       onChange={(e) => handleSliderChange(row.key, Number(e.target.value))}
-                      className="w-16 accent-indigo-600 cursor-pointer"
+                      className="w-16 accent-[#2557A7] cursor-pointer"
                     />
-                    <span className="font-mono font-semibold tabular-nums text-indigo-600 dark:text-indigo-400 w-9 text-right">
+                    <span className="font-mono font-semibold tabular-nums text-[#2557A7] dark:text-blue-400 w-9 text-right">
                       {row.studentProficiency}%
                     </span>
                   </div>
@@ -304,7 +304,7 @@ export const SkillProficiencyRadarCard: React.FC<SkillProficiencyRadarCardProps>
                     <span
                       className={`font-mono font-semibold tabular-nums ${
                         isSurplus
-                          ? 'text-emerald-600 dark:text-emerald-400'
+                          ? 'text-[#087F31] dark:text-emerald-400'
                           : 'text-amber-600 dark:text-amber-400'
                       }`}
                     >
@@ -314,7 +314,7 @@ export const SkillProficiencyRadarCard: React.FC<SkillProficiencyRadarCardProps>
                       <button
                         type="button"
                         onClick={() => onNavigateToLearning(row.skill)}
-                        className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer whitespace-nowrap shrink-0"
+                        className="text-[11px] font-semibold text-[#2557A7] dark:text-blue-400 hover:underline cursor-pointer whitespace-nowrap shrink-0"
                       >
                          Upskill →
                       </button>

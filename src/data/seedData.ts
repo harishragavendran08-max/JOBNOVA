@@ -53,7 +53,7 @@ export interface UserProfile {
   oauthId: string;
   name: string;
   email: string;
-  provider: 'Google' | 'GitHub' | 'LinkedIn' | 'Student Demo';
+  provider: 'Google' | 'GitHub' | 'LinkedIn' | 'Student Demo' | 'Email';
   headline: string;
   location: string;
   summary: string;
@@ -123,7 +123,21 @@ export const SEED_JOBS: JobItem[] = [
   { id: 27, title: 'Frontend UI Engineer', company: 'Freshworks', location: 'Chennai', description: 'Craft polished customer experience interfaces using modern JavaScript, React, CSS3 animations, and web accessibility standards.', skills: 'react,javascript,html,css,uiux', type: 'Full-Time', ctc: '17.0 LPA' },
   { id: 28, title: 'Backend API Developer (Spring Boot)', company: 'PhonePe', location: 'Bengaluru', description: 'Design low-latency financial transaction APIs handling millions of daily requests with Spring Boot and MySQL.', skills: 'java,springboot,mysql,rest-api', type: 'Full-Time', ctc: '25.0 LPA' },
   { id: 29, title: 'Software Development Engineer - 1', company: 'Zoho', location: 'Chennai', description: 'Work directly on core Zoho productivity suite applications using Java, JavaScript, and relational database persistence.', skills: 'java,javascript,mysql,algorithms', type: 'Full-Time', ctc: '10.5 LPA' },
-  { id: 30, title: 'Full-Stack Web Architect', company: 'Dell Technologies', location: 'Remote', description: 'Develop modular enterprise cloud portals combining Spring Boot REST services with modern React SPA frontends.', skills: 'java,springboot,react,html,css,mysql', type: 'Remote', ctc: '23.5 LPA' }
+  { id: 30, title: 'Full-Stack Web Architect', company: 'Dell Technologies', location: 'Remote', description: 'Develop modular enterprise cloud portals combining Spring Boot REST services with modern React SPA frontends.', skills: 'java,springboot,react,html,css,mysql', type: 'Remote', ctc: '23.5 LPA' },
+  { id: 31, title: 'GenAI & LLM Software Engineer', company: 'Krutrim AI', location: 'Bengaluru', description: 'Architect production RAG pipelines, multi-agent LLM orchestration workflows, and low-latency inference APIs using LangChain, FastAPI, and vector databases.', skills: 'python,genai,llm,langchain,rag,fastapi,vectordb,openai', type: 'Full-Time', ctc: '27.5 LPA' },
+  { id: 32, title: 'AI / Machine Learning Engineer', company: 'Flipkart', location: 'Bengaluru', description: 'Train, fine-tune, and deploy deep learning ranking, recommendation, and LLM search models using PyTorch, TensorFlow, and Hugging Face transformers.', skills: 'python,pytorch,tensorflow,huggingface,ml,llm,docker', type: 'Full-Time', ctc: '29.0 LPA' },
+  { id: 33, title: 'MLOps Platform Engineer', company: 'Meesho', location: 'Bengaluru', description: 'Build automated ML feature stores, model registries, CI/CD training pipelines, and scalable GPU serving infrastructure on Kubernetes.', skills: 'python,mlflow,airflow,docker,kubernetes,aws', type: 'Full-Time', ctc: '24.5 LPA' },
+  { id: 34, title: 'Backend Engineer (Golang / Distributed Systems)', company: 'Gojek', location: 'Bengaluru', description: 'Design high-concurrency Go microservices powering real-time logistics dispatch, Kafka event streaming, and sub-10ms Redis caching.', skills: 'golang,grpc,kafka,postgresql,redis,kubernetes', type: 'Full-Time', ctc: '26.0 LPA' },
+  { id: 35, title: 'Systems & Low-Latency Engineer (Rust)', company: 'Zerodha', location: 'Bengaluru', description: 'Engineer ultra-low-latency order routing and market data processing daemons in Rust with zero-allocation memory safety on Linux.', skills: 'rust,tokio,postgresql,redis,linux,networking', type: 'Full-Time', ctc: '28.5 LPA' },
+  { id: 36, title: 'Python Backend Engineer (FastAPI & Django)', company: 'Postman', location: 'Bengaluru', description: 'Build scalable developer platform APIs, async task queues, and multi-tenant Postgres data layers using FastAPI and Django.', skills: 'python,fastapi,django,postgresql,redis,docker', type: 'Full-Time', ctc: '21.5 LPA' },
+  { id: 37, title: 'Site Reliability Engineer (SRE)', company: 'Atlassian India', location: 'Bengaluru', description: 'Own production reliability, SLO error budgets, Terraform IaC automation, and Prometheus/Grafana observability across multi-region clusters.', skills: 'kubernetes,terraform,prometheus,grafana,aws,python', type: 'Full-Time', ctc: '30.0 LPA' },
+  { id: 38, title: 'Cloud Solutions Architect (Multi-Cloud)', company: 'Amazon India', location: 'Hyderabad', description: 'Design resilient, cost-optimized multi-cloud enterprise architectures using Terraform, Kubernetes, serverless workloads, and IAM & VPC security.', skills: 'aws,azure,gcp,terraform,kubernetes,microservices', type: 'Full-Time', ctc: '34.0 LPA' },
+  { id: 39, title: 'Senior Data Engineer (Lakehouse & Streaming)', company: 'Databricks India', location: 'Bengaluru', description: 'Architect petabyte-scale batch and streaming lakehouse pipelines using Apache Spark, Kafka, Airflow, dbt, and Snowflake.', skills: 'python,sql,spark,kafka,airflow,dbt,snowflake', type: 'Full-Time', ctc: '29.5 LPA' },
+  { id: 40, title: 'Analytics & BI Data Engineer', company: 'Swiggy', location: 'Hyderabad', description: 'Model warehouse star schemas in dbt and Snowflake, optimize analytical SQL queries, and automate executive telemetry datasets.', skills: 'sql,python,dbt,snowflake,pandas,tableau', type: 'Full-Time', ctc: '18.0 LPA' },
+  { id: 41, title: 'SDET / QA Automation Engineer', company: 'BrowserStack', location: 'Mumbai', description: 'Build cross-browser end-to-end test frameworks with Playwright and TypeScript alongside automated API contract suites in CI/CD.', skills: 'playwright,selenium,typescript,restassured,cicd,testing', type: 'Full-Time', ctc: '16.0 LPA' },
+  { id: 42, title: 'Cloud Security & SOC Engineer', company: 'CrowdStrike India', location: 'Pune', description: 'Monitor cloud workloads, automate AWS IAM least-privilege guardrails, investigate SIEM threat telemetry, and run vulnerability assessments.', skills: 'cybersecurity,aws,iam,siem,linux,networking', type: 'Full-Time', ctc: '22.5 LPA' },
+  { id: 43, title: 'Mobile Engineer (React Native & Cross-Platform)', company: 'CRED', location: 'Bengaluru', description: 'Craft smooth 60fps iOS and Android fintech experiences using React Native, TypeScript, native bridges, and offline state sync.', skills: 'react-native,react,typescript,ios,android,rest-api', type: 'Full-Time', ctc: '24.0 LPA' },
+  { id: 44, title: 'Node.js & Next.js Full-Stack Engineer', company: 'Zepto', location: 'Remote', description: 'Ship consumer storefront and real-time quick-commerce ops dashboards using Next.js, Node.js, TypeScript, and PostgreSQL.', skills: 'nodejs,nextjs,typescript,react,postgresql,redis', type: 'Remote', ctc: '20.0 LPA' }
 ];
 
 // Curated Internships with stipends and real software engineering technologies
@@ -143,7 +157,11 @@ export const SEED_INTERNSHIPS: InternshipItem[] = [
   { id: 13, title: 'Software Engineering Summer Intern', company: 'Microsoft India', location: 'Hyderabad', description: 'Join Azure cloud or developer tooling teams building reliable cloud services and modern web experiences.', duration: '2 Months', stipend: '₹80,000 / mo' },
   { id: 14, title: 'Java Software Development Intern', company: 'Oracle India', location: 'Bengaluru', description: 'Develop cloud infrastructure modules, automated testing suites, and API endpoints using Java 17.', duration: '6 Months', stipend: '₹40,000 / mo' },
   { id: 15, title: 'Frontend Engineering Intern', company: 'Swiggy', location: 'Remote', description: 'Implement consumer-facing web experiences using HTML5, CSS3, modern JavaScript, and React components.', duration: '3 Months', stipend: '₹30,000 / mo' },
-  { id: 16, title: 'Cloud & DevOps Intern', company: 'Amazon India', location: 'Chennai', description: 'Automate build pipelines, container deployments with Docker, and cloud monitoring on AWS.', duration: '6 Months', stipend: '₹60,000 / mo' }
+  { id: 16, title: 'Cloud & DevOps Intern', company: 'Amazon India', location: 'Chennai', description: 'Automate build pipelines, container deployments with Docker, and cloud monitoring on AWS.', duration: '6 Months', stipend: '₹60,000 / mo' },
+  { id: 17, title: 'GenAI & LLM Engineering Intern', company: 'Krutrim AI', location: 'Bengaluru', description: 'Build RAG pipelines, prompt evaluation harnesses, and FastAPI endpoints using Python, LangChain, and vector databases.', duration: '6 Months', stipend: '₹45,000 / mo' },
+  { id: 18, title: 'Golang & Cloud Microservices Intern', company: 'Razorpay', location: 'Bengaluru', description: 'Develop high-throughput backend services in Go, Docker, Kafka, and PostgreSQL for payment observability.', duration: '6 Months', stipend: '₹50,000 / mo' },
+  { id: 19, title: 'Data Engineering & Spark Intern', company: 'Databricks India', location: 'Hyderabad', description: 'Build ETL data pipelines with Python, SQL, Apache Spark, dbt, and Airflow on cloud data lakehouses.', duration: '4 Months', stipend: '₹55,000 / mo' },
+  { id: 20, title: 'QA Automation & Playwright Intern', company: 'BrowserStack', location: 'Remote', description: 'Write automated cross-browser E2E test suites using Playwright, TypeScript, and CI/CD workflows.', duration: '3 Months', stipend: '₹28,000 / mo' }
 ];
 
 // Exact 30 Courses from src/main/resources/data.sql
@@ -177,10 +195,14 @@ export const SEED_COURSES: CourseItem[] = [
   { id: 27, title: 'Big Data & Hadoop Fundamentals', provider: 'Coursera', url: 'https://coursera.org/learn/big-data', description: 'Learn data engineering using Hadoop and Spark.', level: 'Advanced' },
   { id: 28, title: 'Ethical Hacking & Penetration Testing', provider: 'Udemy', url: 'https://udemy.com/course/ethical-hacking', description: 'Learn hacking techniques and cybersecurity defense.', level: 'Advanced' },
   { id: 29, title: 'AI with ChatGPT & OpenAI API', provider: 'Udemy', url: 'https://udemy.com/course/chatgpt-openai', description: 'Integrate AI APIs to build smart applications.', level: 'Intermediate' },
-  { id: 30, title: 'Career Growth & Soft Skills', provider: 'LinkedIn Learning', url: 'https://linkedin.com/learning', description: 'Develop communication, teamwork, and leadership skills.', level: 'Beginner' }
+  { id: 30, title: 'Career Growth & Soft Skills', provider: 'LinkedIn Learning', url: 'https://linkedin.com/learning', description: 'Develop communication, teamwork, and leadership skills.', level: 'Beginner' },
+  { id: 31, title: 'Generative AI, RAG & LangChain Engineering', provider: 'DeepLearning.AI', url: 'https://www.deeplearning.ai/short-courses/', description: 'Build production RAG pipelines, vector search, and LLM agents with Python and FastAPI.', level: 'Intermediate' },
+  { id: 32, title: 'Go (Golang) Microservices & gRPC Systems', provider: 'Udemy', url: 'https://udemy.com/course/golang-microservices', description: 'Master concurrency, gRPC, Kafka event streaming, and PostgreSQL with Go.', level: 'Intermediate' },
+  { id: 33, title: 'Kubernetes, Terraform & Site Reliability (SRE)', provider: 'Coursera', url: 'https://coursera.org/learn/kubernetes-terraform-sre', description: 'Automate infrastructure with Terraform and operate resilient Kubernetes clusters.', level: 'Advanced' },
+  { id: 34, title: 'Modern Data Engineering with Spark, dbt & Snowflake', provider: 'Coursera', url: 'https://coursera.org/learn/modern-data-engineering', description: 'Design lakehouse pipelines with Python, Apache Spark, Airflow, dbt, and Snowflake.', level: 'Intermediate' }
 ];
 
-// Curated Industry Certifications for Full-Stack, Java, Cloud & Database Roles
+// Curated Industry Certifications across Full-Stack, AI/Data, Cloud, DevOps & Security
 export const SEED_CERTIFICATIONS: CertificationItem[] = [
   { id: 1, name: 'Java SE 11 Developer', issuer: 'Oracle', credentialUrl: 'https://education.oracle.com/java-se-11-developer' },
   { id: 2, name: 'AWS Certified Cloud Practitioner', issuer: 'Amazon', credentialUrl: 'https://aws.amazon.com/certification/' },
@@ -195,7 +217,11 @@ export const SEED_CERTIFICATIONS: CertificationItem[] = [
   { id: 11, name: 'Google Associate Cloud Engineer', issuer: 'Google', credentialUrl: 'https://cloud.google.com/learn/certification/cloud-engineer' },
   { id: 12, name: 'MySQL 8.0 Database Developer Certified Professional', issuer: 'Oracle', credentialUrl: 'https://education.oracle.com/mysql-80-database-developer' },
   { id: 13, name: 'IBM Full Stack Software Developer Certificate', issuer: 'IBM', credentialUrl: 'https://www.coursera.org/professional-certificates/ibm-full-stack-cloud-developer' },
-  { id: 14, name: 'Microsoft Certified: Azure Developer Associate (AZ-204)', issuer: 'Microsoft', credentialUrl: 'https://learn.microsoft.com/en-us/credentials/certifications/azure-developer/' }
+  { id: 14, name: 'Microsoft Certified: Azure Developer Associate (AZ-204)', issuer: 'Microsoft', credentialUrl: 'https://learn.microsoft.com/en-us/credentials/certifications/azure-developer/' },
+  { id: 15, name: 'Certified Kubernetes Administrator (CKA)', issuer: 'CNCF', credentialUrl: 'https://training.linuxfoundation.org/certification/certified-kubernetes-administrator-cka/' },
+  { id: 16, name: 'HashiCorp Certified: Terraform Associate', issuer: 'HashiCorp', credentialUrl: 'https://developer.hashicorp.com/certifications/infrastructure-automation' },
+  { id: 17, name: 'AWS Certified Machine Learning – Specialty', issuer: 'Amazon', credentialUrl: 'https://aws.amazon.com/certification/certified-machine-learning-specialty/' },
+  { id: 18, name: 'Databricks Certified Data Engineer Associate', issuer: 'Databricks', credentialUrl: 'https://www.databricks.com/learn/certification/data-engineer-associate' }
 ];
 
 // Predefined knowledge base from GeminiController.java + extended topics
@@ -246,7 +272,22 @@ Example:
 • Practice explaining complex code concepts in simple terms.
 • Record mock interview answers to refine pacing and clarity.
 • Listen actively to the full question before structuring your answer.
-• Aim for clarity and structure rather than perfection.`
+• Aim for clarity and structure rather than perfection.`,
+  genai: `GenAI, LLM & MLOps Career Roadmap:
+• Master Python, FastAPI, structured tool/function calling, and RAG architectures with vector databases.
+• Learn evaluation frameworks (latency, groundedness, retrieval precision) alongside PyTorch & Hugging Face.
+• Understand containerization (Docker), model registries (MLflow), and GPU serving on Kubernetes.`,
+  golang: `Backend Systems Career Path (Go, Rust & Microservices):
+• Practice concurrency patterns (goroutines/channels in Go; async/Tokio ownership in Rust).
+• Build gRPC + REST services backed by PostgreSQL, Redis caching, and Kafka event streams.
+• Benchmark throughput, p99 latency, and graceful shutdowns under load.`,
+  cloud: `Cloud, DevOps & SRE Essential Skills:
+• Automate infrastructure as code with Terraform and container orchestration on Kubernetes.
+• Build observability pipelines using Prometheus, Grafana, OpenTelemetry, and SLO error budgets.
+• Pair AWS/Azure/GCP networking & IAM least-privilege security with CI/CD pipelines.`,
+  'data engineering': `Data Engineering & Lakehouse Stack:
+• Write strong analytical SQL (window functions, query plan tuning) alongside Python & PySpark.
+• Model dimensional tables using dbt, schedule DAGs with Airflow, and stream events via Kafka into Snowflake.`
 };
 
 export const SEED_LINKEDIN_PROFILE_SUMMARY =
@@ -254,6 +295,17 @@ export const SEED_LINKEDIN_PROFILE_SUMMARY =
 
 export const SEED_LINKEDIN_HEADLINE =
   'Software Engineer Intern @ TechCorp | Full-Stack Developer · Java, Spring Boot, React.js, MySQL | Open Source Contributor';
+
+export const SEED_LINKEDIN_EDUCATION =
+  'B.E. in Computer Science & Engineering · Anna University, Chennai (2023–2027) · CGPA: 8.9/10 · Coursework: Distributed Systems, DBMS, Algorithms & Spring Boot';
+
+export const SEED_LINKEDIN_SKILLS: string[] = [
+  'docker',
+  'kubernetes',
+  'rest-api',
+  'microservices',
+  'git'
+];
 
 export const SEED_LINKEDIN_WORK_HISTORY: WorkExperienceItem[] = [
   {

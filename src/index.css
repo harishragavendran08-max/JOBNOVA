@@ -5,6 +5,10 @@
   :root {
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
+    --brand-primary: #2557a7;
+    --brand-primary-hover: #164081;
+    --brand-emerald: #087f31;
+    --canvas-light: #f5f6f8;
   }
 
   body {
@@ -16,5 +20,27 @@
   .tabular-nums {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+  }
+}
+
+@media print {
+  header,
+  footer,
+  .no-print {
+    display: none !important;
+  }
+
+  body,
+  main {
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  #resume-document-sheet {
+    border: none !important;
+    box-shadow: none !important;
+    border-radius: 0 !important;
+    transform: none !important;
   }
 }

@@ -7,20 +7,27 @@ import {
   SEED_COURSES,
   SEED_INTERNSHIPS,
   SEED_JOBS,
+  SEED_LINKEDIN_EDUCATION,
   SEED_LINKEDIN_HEADLINE,
   SEED_LINKEDIN_PROFILE_SUMMARY,
+  SEED_LINKEDIN_SKILLS,
   SEED_LINKEDIN_WORK_HISTORY,
   SPRING_BOOT_DIAGNOSTICS
 } from '../data/seedData';
 import {
   addInterviewFeedbackRecord,
+  applyLinkedInSyncPayload,
+  buildFinishProfileAiPrompt,
+  buildJobShareLinks,
   buildLinkedInShareUrl,
+  buildMockLinkedInProfilePayload,
   buildResumeStructuredData,
   computeCareerStats,
   computeCareerTimelineSummary,
   computeInterviewCountdown,
   computeLinkedInConnectionHealth,
   computePersonalizedSkillAlerts,
+  computeProfileCompletionProgress,
   computeProfileSkillGapAnalysis,
   computeProfileSkillProficiencyList,
   computeResumeHealthScore,
@@ -34,7 +41,9 @@ import {
   filterDiagnostics,
   filterInternships,
   filterJobsBySkill,
+  filterJobsList,
   formatApplicationStatusNotification,
+  normalizeSavedJobIds,
   formatWorkExperienceDuration,
   generateLinkedInShareText,
   generateMockInterviewQuestions,
@@ -52,8 +61,8 @@ import {
   updateSkillProficiencyMap
 } from './jobnovaLogic';
 
-test('filterJobsBySkill filters 30 seeded jobs by skill, company, and location', () => {
-  assert.equal(SEED_JOBS.length, 30);
+test('filterJobsBySkill filters 44 seeded jobs across Java, GenAI, Go, Rust, Cloud, Data, QA & Security stacks', () => {
+  assert.equal(SEED_JOBS.length, 44);
   const javaJobs = filterJobsBySkill(SEED_JOBS, 'springboot');
   assert.ok(javaJobs.length >= 5);
   assert.equal(javaJobs[0].company, 'TCS');
@@ -61,33 +70,70 @@ test('filterJobsBySkill filters 30 seeded jobs by skill, company, and location',
 
   const chennaiJobs = filterJobsBySkill(SEED_JOBS, '', 'Chennai');
   assert.equal(chennaiJobs.length, 7);
+
+  const genaiJobs = filterJobsBySkill(SEED_JOBS, 'genai');
+  assert.equal(genaiJobs.length, 1);
+  assert.equal(genaiJobs[0].company, 'Krutrim AI');
+
+  const goJobs = filterJobsBySkill(SEED_JOBS, 'golang');
+  assert.equal(goJobs.length, 1);
+  assert.equal(goJobs[0].company, 'Gojek');
+
+  const rustJobs = filterJobsBySkill(SEED_JOBS, 'rust');
+  assert.equal(rustJobs.length, 1);
+  assert.equal(rustJobs[0].company, 'Zerodha');
+
+  const k8sJobs = filterJobsBySkill(SEED_JOBS, 'kubernetes');
+  assert.ok(k8sJobs.length >= 5);
+
+  const dataJobs = filterJobsBySkill(SEED_JOBS, 'snowflake');
+  assert.equal(dataJobs.length, 2);
+
+  const qaJobs = filterJobsBySkill(SEED_JOBS, 'playwright');
+  assert.equal(qaJobs.length, 1);
+  assert.equal(qaJobs[0].company, 'BrowserStack');
+
+  const secJobs = filterJobsBySkill(SEED_JOBS, 'cybersecurity');
+  assert.equal(secJobs.length, 2);
 });
 
-test('filterInternships filters 16 seeded internships accurately', () => {
-  assert.equal(SEED_INTERNSHIPS.length, 16);
+test('filterInternships filters 20 seeded internships accurately', () => {
+  assert.equal(SEED_INTERNSHIPS.length, 20);
   const remoteInterns = filterInternships(SEED_INTERNSHIPS, '', 'Remote');
-  assert.equal(remoteInterns.length, 5);
+  assert.equal(remoteInterns.length, 6);
 
   const pythonInterns = filterInternships(SEED_INTERNSHIPS, 'python');
-  assert.equal(pythonInterns.length, 1);
+  assert.equal(pythonInterns.length, 3);
   assert.equal(pythonInterns[0].company, 'Infosys');
+
+  const genaiInterns = filterInternships(SEED_INTERNSHIPS, 'langchain');
+  assert.equal(genaiInterns.length, 1);
+  assert.equal(genaiInterns[0].company, 'Krutrim AI');
 });
 
-test('filterCourses filters 30 seeded courses by keyword and provider', () => {
-  assert.equal(SEED_COURSES.length, 30);
+test('filterCourses filters 34 seeded courses by keyword and provider', () => {
+  assert.equal(SEED_COURSES.length, 34);
   const springCourses = filterCourses(SEED_COURSES, 'Spring');
   assert.equal(springCourses.length, 2); // Spring Boot Complete Guide & REST API Design
 
   const courseraCourses = filterCourses(SEED_COURSES, '', 'Coursera');
-  assert.ok(courseraCourses.length >= 8);
+  assert.ok(courseraCourses.length >= 10);
+
+  const ragCourses = filterCourses(SEED_COURSES, 'LangChain');
+  assert.equal(ragCourses.length, 1);
 });
 
-test('filterCertifications filters 14 seeded certifications by name and issuer', () => {
-  assert.equal(SEED_CERTIFICATIONS.length, 14);
+test('filterCertifications filters 18 seeded certifications by name and issuer', () => {
+  assert.equal(SEED_CERTIFICATIONS.length, 18);
   const awsCerts = filterCertifications(SEED_CERTIFICATIONS, 'aws');
-  assert.equal(awsCerts.length, 2);
+  assert.equal(awsCerts.length, 3);
   assert.equal(awsCerts[0].issuer, 'Amazon');
   assert.equal(awsCerts[1].issuer, 'Amazon');
+  assert.equal(awsCerts[2].issuer, 'Amazon');
+
+  const k8sCerts = filterCertifications(SEED_CERTIFICATIONS, 'Kubernetes');
+  assert.equal(k8sCerts.length, 1);
+  assert.equal(k8sCerts[0].issuer, 'CNCF');
 });
 
 test('matchOfflineCareerAssistant returns knowledge base responses for known keywords', () => {
@@ -683,6 +729,17 @@ test('generateLinkedInShareText and buildLinkedInShareUrl format broadcast posts
   const internShareUrl = buildLinkedInShareUrl(internPayload);
   assert.ok(internShareUrl.startsWith('https://www.linkedin.com/sharing/share-offsite/'));
   assert.ok(internShareUrl.includes(encodeURIComponent('role=Web+Development+Intern')));
+
+  // 3. Multi-channel Share Links (Twitter, WhatsApp, Email, LinkedIn)
+  const shareLinks = buildJobShareLinks(jobPayload);
+  assert.ok(shareLinks.targetUrl.startsWith('https://jobnova.career/'));
+  assert.ok(shareLinks.twitterUrl.startsWith('https://twitter.com/intent/tweet'));
+  assert.ok(shareLinks.twitterUrl.includes('Software+Engineer'));
+  assert.ok(shareLinks.whatsappUrl.startsWith('https://wa.me/'));
+  assert.ok(shareLinks.whatsappUrl.includes('TCS'));
+  assert.ok(shareLinks.emailUrl.startsWith('mailto:?subject='));
+  assert.ok(shareLinks.emailUrl.includes('Software%20Engineer%20Opportunity%20at%20TCS'));
+  assert.ok(shareLinks.linkedinUrl.startsWith('https://www.linkedin.com/sharing/share-offsite/'));
 });
 
 test('computeLinkedInConnectionHealth evaluates connection health, relative last sync time, and disconnected states', () => {
@@ -750,7 +807,133 @@ test('computeLinkedInConnectionHealth evaluates connection health, relative last
   assert.equal(defaultSynced.healthScorePct, 100);
 });
 
+test('buildMockLinkedInProfilePayload and applyLinkedInSyncPayload sync work history, skills, and education cleanly', () => {
+  const payload = buildMockLinkedInProfilePayload();
+  assert.equal(payload.provider, 'LinkedIn');
+  assert.equal(payload.education, SEED_LINKEDIN_EDUCATION);
+  assert.deepEqual(payload.skills, SEED_LINKEDIN_SKILLS);
+  assert.equal(payload.workHistory.length, 2);
 
+  const startingProfile = {
+    ...DEFAULT_USER_PROFILE,
+    skills: ['java', 'springboot'],
+    workHistory: [],
+    education: 'B.E. in Computer Science'
+  };
 
+  const firstSync = applyLinkedInSyncPayload(startingProfile, payload);
+  assert.equal(firstSync.user.linkedInConnected, true);
+  assert.equal(firstSync.user.workHistory?.length, 2);
+  assert.equal(firstSync.syncedRolesCount, 2);
+  assert.equal(firstSync.addedSkillsCount, SEED_LINKEDIN_SKILLS.length);
+  assert.equal(firstSync.educationUpdated, true);
+  assert.equal(firstSync.user.education, SEED_LINKEDIN_EDUCATION);
+  assert.ok(firstSync.user.skills.includes('java'));
+  for (const sk of SEED_LINKEDIN_SKILLS) {
+    assert.ok(firstSync.user.skills.includes(sk));
+  }
+  assert.ok(firstSync.syncedFields.includes('workHistory'));
+  assert.ok(firstSync.syncedFields.includes('skills'));
+  assert.ok(firstSync.syncedFields.includes('education'));
 
+  // Re-syncing is idempotent: no duplicate roles or duplicate skills
+  const secondSync = applyLinkedInSyncPayload(firstSync.user, payload);
+  assert.equal(secondSync.user.workHistory?.length, 2);
+  assert.equal(secondSync.addedSkillsCount, 0);
+  assert.equal(secondSync.educationUpdated, false);
+});
 
+test('computeProfileCompletionProgress and buildFinishProfileAiPrompt evaluate work history, skills, and education and generate targeted AI prompts', () => {
+  // 1. Default profile: 0 work roles, 7 skills, education without CGPA/coursework -> 43%
+  const initialCompletion = computeProfileCompletionProgress({
+    workHistory: DEFAULT_USER_PROFILE.workHistory,
+    skills: DEFAULT_USER_PROFILE.skills,
+    education: DEFAULT_USER_PROFILE.education
+  });
+  assert.equal(initialCompletion.percentage, 43);
+  assert.equal(initialCompletion.completedSectionsCount, 0);
+  assert.deepEqual(initialCompletion.missingSectionLabels, [
+    'Work History',
+    'Skills',
+    'Education'
+  ]);
+
+  const prompt = buildFinishProfileAiPrompt(initialCompletion, DEFAULT_USER_PROFILE);
+  assert.ok(prompt.includes('43%'));
+  assert.ok(prompt.includes('Work History'));
+  assert.ok(prompt.includes('Skills'));
+  assert.ok(prompt.includes('Education'));
+
+  const assistantReply = matchOfflineCareerAssistant(prompt);
+  assert.ok(assistantReply.includes('Work History'));
+  assert.ok(assistantReply.includes('Skills'));
+  assert.ok(assistantReply.includes('Education'));
+
+  // 2. Empty profile -> 0%
+  const emptyCompletion = computeProfileCompletionProgress({
+    workHistory: [],
+    skills: [],
+    education: ''
+  });
+  assert.equal(emptyCompletion.percentage, 0);
+
+  // 3. Fully synced LinkedIn profile -> 100%
+  const synced = applyLinkedInSyncPayload(DEFAULT_USER_PROFILE, buildMockLinkedInProfilePayload());
+  const fullCompletion = computeProfileCompletionProgress({
+    workHistory: synced.user.workHistory,
+    skills: synced.user.skills,
+    education: synced.user.education
+  });
+  assert.equal(fullCompletion.percentage, 100);
+  assert.equal(fullCompletion.completedSectionsCount, 3);
+  assert.deepEqual(fullCompletion.missingSectionLabels, []);
+});
+
+test('normalizeSavedJobIds and filterJobsList manage bookmarked jobs separately from applications', () => {
+  assert.deepEqual(normalizeSavedJobIds([2, 5, 2, -1, 'invalid', 8, 0]), [2, 5, 8]);
+  assert.deepEqual(normalizeSavedJobIds(null), []);
+
+  // Toggling bookmark IDs leaves applied IDs untouched
+  const appliedIds = [1];
+  let savedIds = normalizeSavedJobIds([]);
+  savedIds = toggleItemSelection(savedIds, 3);
+  savedIds = toggleItemSelection(savedIds, 5);
+  assert.deepEqual(savedIds, [3, 5]);
+  assert.deepEqual(appliedIds, [1]);
+
+  // Saved Jobs filter returns only bookmarked jobs matching query/location
+  const allSaved = filterJobsList(SEED_JOBS, {
+    query: '',
+    locationFilter: 'ALL',
+    onlySaved: true,
+    savedJobIds: savedIds
+  });
+  assert.deepEqual(
+    allSaved.map((j) => j.id),
+    [3, 5]
+  );
+
+  const savedInBengaluru = filterJobsList(SEED_JOBS, {
+    query: 'python',
+    locationFilter: 'Bengaluru',
+    onlySaved: true,
+    savedJobIds: savedIds
+  });
+  assert.deepEqual(
+    savedInBengaluru.map((j) => j.id),
+    [5]
+  );
+
+  // Toggling off removes job cleanly
+  savedIds = toggleItemSelection(savedIds, 3);
+  const afterRemove = filterJobsList(SEED_JOBS, {
+    query: '',
+    locationFilter: 'ALL',
+    onlySaved: true,
+    savedJobIds: savedIds
+  });
+  assert.deepEqual(
+    afterRemove.map((j) => j.id),
+    [5]
+  );
+});

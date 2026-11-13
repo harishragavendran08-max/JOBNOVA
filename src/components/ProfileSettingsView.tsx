@@ -31,16 +31,22 @@ import {
   CourseItem,
   DEFAULT_USER_PROFILE,
   JobItem,
+  SEED_LINKEDIN_EDUCATION,
   SEED_LINKEDIN_HEADLINE,
   SEED_LINKEDIN_PROFILE_SUMMARY,
+  SEED_LINKEDIN_SKILLS,
   SEED_LINKEDIN_WORK_HISTORY,
   UserProfile,
   UserSettings,
   WorkExperienceItem
 } from '../data/seedData';
 import {
+  applyLinkedInSyncPayload,
+  buildFinishProfileAiPrompt,
+  buildMockLinkedInProfilePayload,
   buildResumeStructuredData,
   computeLinkedInConnectionHealth,
+  computeProfileCompletionProgress,
   computeProfileSkillGapAnalysis,
   computeProfileSkillProficiencyList,
   computeResumeHealthScore,
@@ -70,6 +76,10 @@ interface ProfileSettingsViewProps {
   onToggleCourseEnroll?: (course: CourseItem) => void;
   onToggleCertTrack?: (cert: CertificationItem) => void;
   onNavigateToLearning?: (skillKeyword?: string) => void;
+  onOpenResumeBuilder?: () => void;
+  onFinishProfileWithAi?: (prompt: string) => void;
+  onOpenLogin?: () => void;
+  onOpenSignUp?: () => void;
   onNotify?: (message: string) => void;
 }
 
@@ -89,6 +99,10 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
   onToggleCourseEnroll,
   onToggleCertTrack,
   onNavigateToLearning,
+  onOpenResumeBuilder,
+  onFinishProfileWithAi,
+  onOpenLogin,
+  onOpenSignUp,
   onNotify
 }) => {
   const [nameInput, setNameInput] = useState(user?.name || 'Harish Ragavendran');
@@ -135,6 +149,8 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
     user?.workHistory || []
   );
   const [isConnectingLinkedIn, setIsConnectingLinkedIn] = useState(false);
+  const [isSyncingLinkedIn, setIsSyncingLinkedIn] = useState(false);
+  const [lastSyncSummary, setLastSyncSummary] = useState<string | null>(null);
   const [linkedInModalOpen, setLinkedInModalOpen] = useState(false);
   const [showAddWorkModal, setShowAddWorkModal] = useState(false);
   const [newWorkTitle, setNewWorkTitle] = useState('');
@@ -221,6 +237,45 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
     connected: user?.linkedInConnected,
     lastSyncedIso: user?.lastLinkedInSync
   });
+
+  const profileCompletion = computeProfileCompletionProgress({
+    workHistory,
+    skills: parsedSkillsInput,
+    education: educationInput
+  });
+
+  const handleFinishProfileClick = () => {
+    const aiPrompt = buildFinishProfileAiPrompt(profileCompletion, {
+      name: nameInput.trim(),
+      headline: headlineInput.trim(),
+      skills: parsedSkillsInput,
+      education: educationInput.trim(),
+      workHistory
+    });
+
+    if (onFinishProfileWithAi) {
+      onFinishProfileWithAi(aiPrompt);
+    } else {
+      setSavedBanner(aiPrompt);
+      if (onNotify) onNotify('Generated AI profile completion prompt.');
+    }
+  };
+
+  const handleJumpToProfileSection = (sectionKey: 'workHistory' | 'skills' | 'education') => {
+    if (sectionKey === 'workHistory') {
+      document
+        .querySelector('[data-testid="profile-work-history-section"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else if (sectionKey === 'skills') {
+      const el = document.getElementById('profile-skills-input') as HTMLInputElement | null;
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el?.focus();
+    } else if (sectionKey === 'education') {
+      const el = document.getElementById('profile-education-input') as HTMLInputElement | null;
+      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el?.focus();
+    }
+  };
 
   const skillProficiencyList = computeProfileSkillProficiencyList({
     userSkills: activeUserSkills,
@@ -384,6 +439,7 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
   const handleApplyLinkedInImport = async (data: {
     headline?: string;
     summary?: string;
+    education?: string;
     workHistory?: WorkExperienceItem[];
     skills?: string[];
     linkedInProfileUrl?: string;
@@ -392,14 +448,16 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
     const merged = importLinkedInProfileData(base, {
       headline: data.headline || SEED_LINKEDIN_HEADLINE,
       summary: data.summary || SEED_LINKEDIN_PROFILE_SUMMARY,
+      education: data.education || SEED_LINKEDIN_EDUCATION,
       workHistory: data.workHistory || SEED_LINKEDIN_WORK_HISTORY,
-      skills: data.skills || ['docker', 'kubernetes', 'rest-api'],
+      skills: data.skills || SEED_LINKEDIN_SKILLS,
       linkedInProfileUrl: data.linkedInProfileUrl || 'https://linkedin.com/in/harish-ragavendran'
     });
 
     onUpdateProfile(merged);
     setHeadlineInput(merged.headline);
     setSummaryInput(merged.summary);
+    if (merged.education) setEducationInput(merged.education);
     setSkillsInput(merged.skills.join(', '));
     setWorkHistory(merged.workHistory || []);
 
@@ -413,10 +471,79 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
       // Local state is already updated
     }
 
-    const msg = `LinkedIn connected! Imported ${merged.workHistory?.length || 0} work experience roles, updated professional summary & headline.`;
+    const msg = `LinkedIn connected! Imported ${merged.workHistory?.length || 0} work experience roles, skills, and education details.`;
+    setLastSyncSummary(msg);
     setSavedBanner(msg);
     if (onNotify) onNotify(msg);
     setLinkedInModalOpen(false);
+  };
+
+  const handleSyncFromLinkedIn = async () => {
+    setIsSyncingLinkedIn(true);
+    const draftProfile: UserProfile = {
+      ...(user || DEFAULT_USER_PROFILE),
+      name: nameInput.trim() || user?.name || DEFAULT_USER_PROFILE.name,
+      email: emailInput.trim() || user?.email || DEFAULT_USER_PROFILE.email,
+      headline: headlineInput.trim() || user?.headline || DEFAULT_USER_PROFILE.headline,
+      location: locationInput.trim() || user?.location || DEFAULT_USER_PROFILE.location,
+      summary: summaryInput.trim() || user?.summary || DEFAULT_USER_PROFILE.summary,
+      education: educationInput.trim() || user?.education || DEFAULT_USER_PROFILE.education,
+      skills: activeUserSkills,
+      skillProficiencies,
+      workHistory
+    };
+
+    try {
+      const res = await fetch('/api/linkedin/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentProfile: draftProfile })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const syncedUser: UserProfile =
+          data.user ||
+          applyLinkedInSyncPayload(draftProfile, data.linkedInProfile || buildMockLinkedInProfilePayload()).user;
+
+        onUpdateProfile(syncedUser);
+        setHeadlineInput(syncedUser.headline);
+        setSummaryInput(syncedUser.summary);
+        setEducationInput(syncedUser.education || SEED_LINKEDIN_EDUCATION);
+        setSkillsInput(syncedUser.skills.join(', '));
+        setWorkHistory(syncedUser.workHistory || []);
+
+        const rolesCount = data.syncedRolesCount ?? (syncedUser.workHistory?.length || 0);
+        const skillsAdded = data.addedSkillsCount ?? 0;
+        const msg =
+          data.message ||
+          `Synced ${rolesCount} work roles, ${skillsAdded} new skills, and education details from LinkedIn.`;
+        setLastSyncSummary(msg);
+        setSavedBanner(msg);
+        if (onNotify) onNotify(msg);
+      } else {
+        throw new Error('Mock sync endpoint returned non-OK status');
+      }
+    } catch {
+      const fallbackResult = applyLinkedInSyncPayload(
+        draftProfile,
+        buildMockLinkedInProfilePayload()
+      );
+      const syncedUser = fallbackResult.user;
+      onUpdateProfile(syncedUser);
+      setHeadlineInput(syncedUser.headline);
+      setSummaryInput(syncedUser.summary);
+      setEducationInput(syncedUser.education || SEED_LINKEDIN_EDUCATION);
+      setSkillsInput(syncedUser.skills.join(', '));
+      setWorkHistory(syncedUser.workHistory || []);
+
+      const msg = `Synced ${fallbackResult.syncedRolesCount} work roles, ${fallbackResult.addedSkillsCount} new skills, and education details from LinkedIn.`;
+      setLastSyncSummary(msg);
+      setSavedBanner(msg);
+      if (onNotify) onNotify(msg);
+    } finally {
+      setIsSyncingLinkedIn(false);
+    }
   };
 
   const handleConnectLinkedIn = async () => {
@@ -433,57 +560,14 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
         'width=600,height=720,status=no,toolbar=no,menubar=no'
       );
 
-      // If popup was blocked or iframe restriction occurs, smoothly fallback to direct import
+      // If popup was blocked or iframe restriction occurs, smoothly fallback to direct sync
       if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-        await handleDirectImportLinkedIn();
+        await handleSyncFromLinkedIn();
       }
     } catch {
-      await handleDirectImportLinkedIn();
-    }
-  };
-
-  const handleDirectImportLinkedIn = async () => {
-    setIsConnectingLinkedIn(true);
-    try {
-      const res = await fetch('/api/auth/linkedin/import', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          headline: SEED_LINKEDIN_HEADLINE,
-          summary: SEED_LINKEDIN_PROFILE_SUMMARY,
-          workHistory: SEED_LINKEDIN_WORK_HISTORY,
-          skills: ['docker', 'kubernetes', 'rest-api']
-        })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.user) {
-          onUpdateProfile(data.user);
-          setHeadlineInput(data.user.headline);
-          setSummaryInput(data.user.summary);
-          setSkillsInput(data.user.skills.join(', '));
-          setWorkHistory(data.user.workHistory || []);
-        }
-      } else {
-        await handleApplyLinkedInImport({
-          headline: SEED_LINKEDIN_HEADLINE,
-          summary: SEED_LINKEDIN_PROFILE_SUMMARY,
-          workHistory: SEED_LINKEDIN_WORK_HISTORY,
-          skills: ['docker', 'kubernetes', 'rest-api']
-        });
-      }
-    } catch {
-      await handleApplyLinkedInImport({
-        headline: SEED_LINKEDIN_HEADLINE,
-        summary: SEED_LINKEDIN_PROFILE_SUMMARY,
-        workHistory: SEED_LINKEDIN_WORK_HISTORY,
-        skills: ['docker', 'kubernetes', 'rest-api']
-      });
+      await handleSyncFromLinkedIn();
     } finally {
       setIsConnectingLinkedIn(false);
-      const msg = 'Imported LinkedIn work history and professional summary directly into your JobNova profile!';
-      setSavedBanner(msg);
-      if (onNotify) onNotify(msg);
     }
   };
 
@@ -491,6 +575,7 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
     const base = user || DEFAULT_USER_PROFILE;
     const disconnected = disconnectLinkedInProfile(base, true);
     onUpdateProfile(disconnected);
+    setLastSyncSummary(null);
     try {
       await fetch('/api/auth/linkedin/disconnect', {
         method: 'POST',
@@ -650,15 +735,130 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3 shrink-0">
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            {onOpenResumeBuilder && (
+              <button
+                type="button"
+                data-testid="profile-open-resume-builder-btn"
+                onClick={onOpenResumeBuilder}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold text-[#2557A7] dark:text-blue-400 bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 hover:border-[#2557A7] rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Open Resume Builder Studio</span>
+              </button>
+            )}
             <button
               type="button"
               onClick={handleExportPdfResume}
-              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold text-white bg-[#2557A7] hover:bg-[#164081] rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0"
             >
               <FileDown className="w-4 h-4" />
               <span>Export PDF Resume (.pdf)</span>
             </button>
+          </div>
+        </div>
+
+        {/* Profile Completion Progress Bar & Finish Profile AI CTA */}
+        <div
+          data-testid="profile-completion-progress-card"
+          className="mt-5 p-4 sm:p-5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 space-y-4"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                  Profile Completion Progress
+                </span>
+                <span
+                  data-testid="profile-completion-percentage"
+                  className={`px-2 py-0.5 text-xs font-mono font-bold tabular-nums rounded border ${
+                    profileCompletion.percentage === 100
+                      ? 'bg-emerald-50 dark:bg-emerald-950/60 text-[#087F31] dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                      : 'bg-blue-50 dark:bg-blue-950/60 text-[#2557A7] dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                  }`}
+                >
+                  {profileCompletion.percentage}%
+                </span>
+              </div>
+              <p
+                data-testid="profile-completion-status"
+                className="text-xs text-slate-600 dark:text-slate-400"
+              >
+                {profileCompletion.statusMessage}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              data-testid="finish-profile-ai-btn"
+              onClick={handleFinishProfileClick}
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#2557A7] hover:bg-[#164081] dark:bg-blue-600 dark:hover:bg-blue-500 rounded-lg transition-colors cursor-pointer shadow-xs whitespace-nowrap shrink-0 self-start sm:self-center"
+              title="Prompt the JobNova AI Assistant to help fill in missing work history, skills, and education sections"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>Finish Profile</span>
+            </button>
+          </div>
+
+          {/* Visual Progress Track */}
+          <div className="space-y-1.5">
+            <div
+              role="progressbar"
+              aria-label="Profile Completion Progress"
+              aria-valuenow={profileCompletion.percentage}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              data-testid="profile-completion-progress-bar"
+              className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden"
+            >
+              <div
+                data-testid="profile-completion-progress-fill"
+                className={`h-full rounded-full transition-all duration-500 ${
+                  profileCompletion.percentage >= 85
+                    ? 'bg-[#087F31] dark:bg-emerald-500'
+                    : 'bg-[#2557A7] dark:bg-blue-500'
+                }`}
+                style={{ width: `${profileCompletion.percentage}%` }}
+              />
+            </div>
+          </div>
+
+          {/* Section Breakdown Grid: Work History, Skills, Education */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            {profileCompletion.sections.map((section) => {
+              const isComplete = section.status === 'complete';
+              const isPartial = section.status === 'partial';
+              return (
+                <button
+                  key={section.key}
+                  type="button"
+                  data-testid={`profile-completion-section-${section.key}`}
+                  onClick={() => handleJumpToProfileSection(section.key)}
+                  className="text-left p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[#2557A7] dark:hover:border-blue-500 transition-colors cursor-pointer space-y-1"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                      {section.label}
+                    </span>
+                    <span
+                      className={`text-[11px] font-mono font-semibold tabular-nums ${
+                        isComplete
+                          ? 'text-[#087F31] dark:text-emerald-400'
+                          : isPartial
+                          ? 'text-amber-700 dark:text-amber-300'
+                          : 'text-rose-600 dark:text-rose-400'
+                      }`}
+                    >
+                      {section.earnedPoints}/{section.maxPoints}% ·{' '}
+                      {isComplete ? 'Complete' : isPartial ? 'Partial' : 'Missing'}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                    {section.hint}
+                  </p>
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -1487,14 +1687,14 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
 
             {/* OAuth2 Login & Third-Party Integration Controls */}
             <div className="pt-4 border-t border-slate-200 dark:border-slate-800 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
                   Connected Account Sign-In
                 </span>
                 <div className="flex items-center gap-2">
                   <span
                     data-testid="linkedin-connection-health-pill"
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-mono font-semibold rounded-full border transition-all ${linkedInHealth.badgeClass}`}
+                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-mono font-semibold rounded-full border transition-all whitespace-nowrap ${linkedInHealth.badgeClass}`}
                     title={`LinkedIn Connection Health: ${linkedInHealth.statusLabel} · ${linkedInHealth.displayText}`}
                   >
                     <span
@@ -1511,6 +1711,28 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
               </div>
 
               <div className="flex flex-wrap items-center gap-2.5">
+                {onOpenLogin && (
+                  <button
+                    type="button"
+                    data-testid="profile-open-login-btn"
+                    onClick={onOpenLogin}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-800 dark:text-slate-100 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    <LogIn className="w-3.5 h-3.5 text-[#2557A7] dark:text-blue-400" />
+                    <span>Open Login Page</span>
+                  </button>
+                )}
+                {onOpenSignUp && (
+                  <button
+                    type="button"
+                    data-testid="profile-open-signup-btn"
+                    onClick={onOpenSignUp}
+                    className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-white bg-[#2557A7] hover:bg-[#164081] dark:bg-blue-600 dark:hover:bg-blue-500 rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Create Account (Sign Up)</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => onLoginProvider('Google')}
@@ -1544,62 +1766,65 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
                 data-testid="linkedin-integration-panel"
                 className="mt-2.5 p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800 space-y-3 shadow-2xs"
               >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="w-7 h-7 rounded-lg bg-[#0A66C2] text-white flex items-center justify-center font-bold text-xs shadow-2xs">
-                      in
-                    </span>
-                    <div>
-                      <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
-                        <span>LinkedIn Integration</span>
-                        <span
-                          data-testid="linkedin-connection-health-badge"
-                          className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold font-mono ${linkedInHealth.badgeClass}`}
-                        >
-                          <span data-testid="linkedin-connection-health-label">
-                            {linkedInHealth.statusLabel}
+                <div className="space-y-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-2.5">
+                      <span className="w-7 h-7 rounded-lg bg-[#0A66C2] text-white flex items-center justify-center font-bold text-xs shadow-2xs shrink-0 mt-0.5">
+                        in
+                      </span>
+                      <div>
+                        <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex flex-wrap items-center gap-1.5">
+                          <span>LinkedIn Integration</span>
+                          <span
+                            data-testid="linkedin-connection-health-badge"
+                            className={`text-[10px] px-1.5 py-0.5 rounded border font-semibold font-mono ${linkedInHealth.badgeClass}`}
+                          >
+                            <span data-testid="linkedin-connection-health-label">
+                              {linkedInHealth.statusLabel}
+                            </span>
                           </span>
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                        {user?.linkedInConnected
-                          ? `Imported work history & professional summary · ${workHistory.length} roles`
-                          : 'Connect your LinkedIn account to import work history, summary & skills.'}
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {user?.linkedInConnected
+                            ? `Synced work history, skills & education · ${workHistory.length} roles`
+                            : 'Sync from LinkedIn to fetch work history, skills, and education automatically.'}
+                        </div>
                       </div>
                     </div>
-                  </div>
 
-                  {user?.linkedInConnected ? (
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      <button
-                        type="button"
-                        data-testid="reimport-linkedin-btn"
-                        onClick={handleDirectImportLinkedIn}
-                        disabled={isConnectingLinkedIn}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-[#0A66C2] bg-white dark:bg-slate-900 hover:bg-blue-50 dark:hover:bg-slate-800 rounded-lg border border-[#0A66C2]/30 transition-colors cursor-pointer"
-                        title="Re-sync work experience and summary from LinkedIn"
-                      >
-                        <RefreshCw className={`w-3 h-3 ${isConnectingLinkedIn ? 'animate-spin' : ''}`} />
-                        <span>Re-sync</span>
-                      </button>
+                    {user?.linkedInConnected && (
                       <button
                         type="button"
                         data-testid="disconnect-linkedin-btn"
                         onClick={handleDisconnectLinkedIn}
-                        className="inline-flex items-center gap-1 px-2 py-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer"
+                        className="inline-flex items-center gap-1 px-2 py-1.5 text-[11px] font-semibold text-slate-600 dark:text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 transition-colors cursor-pointer shrink-0"
                         title="Disconnect LinkedIn account"
                       >
                         <Unlink className="w-3 h-3" />
                       </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1.5 shrink-0">
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      data-testid="sync-from-linkedin-btn"
+                      onClick={handleSyncFromLinkedIn}
+                      disabled={isSyncingLinkedIn || isConnectingLinkedIn}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] disabled:opacity-60 rounded-lg transition-colors cursor-pointer shadow-xs whitespace-nowrap shrink-0"
+                      title="Fetch and update work history, skills, and education via LinkedIn API"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 ${isSyncingLinkedIn ? 'animate-spin' : ''}`} />
+                      <span>{isSyncingLinkedIn ? 'Syncing...' : 'Sync from LinkedIn'}</span>
+                    </button>
+
+                    {!user?.linkedInConnected && (
                       <button
                         type="button"
                         data-testid="connect-linkedin-btn"
                         onClick={handleConnectLinkedIn}
-                        disabled={isConnectingLinkedIn}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] rounded-lg transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+                        disabled={isConnectingLinkedIn || isSyncingLinkedIn}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0"
                       >
                         {isConnectingLinkedIn ? (
                           <>
@@ -1608,22 +1833,21 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
                           </>
                         ) : (
                           <>
-                            <span className="font-bold">in</span>
-                            <span>Connect LinkedIn</span>
+                            <span className="font-bold text-[#0A66C2]">in</span>
+                            <span>Connect OAuth</span>
                           </>
                         )}
                       </button>
-                      <button
-                        type="button"
-                        data-testid="direct-import-linkedin-btn"
-                        onClick={handleDirectImportLinkedIn}
-                        disabled={isConnectingLinkedIn}
-                        className="inline-flex items-center gap-1 px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
-                        title="1-Click Direct Import without popup window"
-                      >
-                        <Sparkles className="w-3 h-3 text-amber-500" />
-                        <span>Import</span>
-                      </button>
+                    )}
+                  </div>
+
+                  {lastSyncSummary && (
+                    <div
+                      data-testid="linkedin-sync-status-banner"
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-[11px] font-medium text-emerald-800 dark:text-emerald-200"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+                      <span>{lastSyncSummary}</span>
                     </div>
                   )}
                 </div>
@@ -1772,16 +1996,13 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
                   <button
                     type="button"
                     data-testid="sync-linkedin-summary-btn"
-                    onClick={() => {
-                      setSummaryInput(SEED_LINKEDIN_PROFILE_SUMMARY);
-                      setHeadlineInput(SEED_LINKEDIN_HEADLINE);
-                      setSavedBanner('Applied LinkedIn professional summary & headline into form.');
-                    }}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0A66C2] hover:underline cursor-pointer"
-                    title="Fill summary and headline from LinkedIn"
+                    onClick={handleSyncFromLinkedIn}
+                    disabled={isSyncingLinkedIn}
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0A66C2] hover:underline cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                    title="Sync summary, work history, skills, and education from LinkedIn"
                   >
-                    <Sparkles className="w-3 h-3 text-amber-500" />
-                    <span>Sync from LinkedIn</span>
+                    <RefreshCw className={`w-3 h-3 ${isSyncingLinkedIn ? 'animate-spin' : ''}`} />
+                    <span>{isSyncingLinkedIn ? 'Syncing...' : 'Sync full profile'}</span>
                   </button>
                 </div>
                 <textarea
@@ -1870,12 +2091,12 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
                 <button
                   type="button"
                   data-testid="import-work-history-linkedin-btn"
-                  onClick={handleDirectImportLinkedIn}
-                  disabled={isConnectingLinkedIn}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] rounded-lg transition-colors cursor-pointer shadow-xs whitespace-nowrap"
+                  onClick={handleSyncFromLinkedIn}
+                  disabled={isSyncingLinkedIn || isConnectingLinkedIn}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] disabled:opacity-60 rounded-lg transition-colors cursor-pointer shadow-xs whitespace-nowrap"
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isConnectingLinkedIn ? 'animate-spin' : ''}`} />
-                  <span>Import from LinkedIn</span>
+                  <RefreshCw className={`w-3.5 h-3.5 ${isSyncingLinkedIn ? 'animate-spin' : ''}`} />
+                  <span>{isSyncingLinkedIn ? 'Syncing...' : 'Sync from LinkedIn'}</span>
                 </button>
                 <button
                   type="button"
@@ -2139,12 +2360,12 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
                   <button
                     type="button"
                     data-testid="empty-connect-linkedin-btn"
-                    onClick={handleDirectImportLinkedIn}
-                    disabled={isConnectingLinkedIn}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] rounded-lg transition-colors cursor-pointer shadow-xs"
+                    onClick={handleSyncFromLinkedIn}
+                    disabled={isSyncingLinkedIn || isConnectingLinkedIn}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#0A66C2] hover:bg-[#004182] disabled:opacity-60 rounded-lg transition-colors cursor-pointer shadow-xs whitespace-nowrap"
                   >
-                    <span className="font-bold">in</span>
-                    <span>Import Experience from LinkedIn</span>
+                    <RefreshCw className={`w-3.5 h-3.5 ${isSyncingLinkedIn ? 'animate-spin' : ''}`} />
+                    <span>{isSyncingLinkedIn ? 'Syncing...' : 'Sync from LinkedIn'}</span>
                   </button>
                   <button
                     type="button"
