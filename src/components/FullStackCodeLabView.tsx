@@ -221,7 +221,7 @@ export const FullStackCodeLabView: React.FC<FullStackCodeLabViewProps> = ({
             <div className="lg:col-span-8 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4 shadow-xs">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <Database className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
                   <span className="text-xs font-bold text-slate-800 dark:text-slate-200 font-mono">
                     MySQL 8.0 · jobnova_db (Stateful In-Session Engine)
                   </span>
@@ -431,7 +431,7 @@ export const FullStackCodeLabView: React.FC<FullStackCodeLabViewProps> = ({
 
       {/* ==================== 3. HTML5 / CSS3 / JAVASCRIPT STUDIO ==================== */}
       {activeTab === 'web-sandbox' && (
-        <WebSandboxStudio />
+        <WebSandboxStudio onApiMutated={onJobsUpdated} />
       )}
 
       {/* ==================== 4. PLACEMENT CODE CHALLENGES ==================== */}

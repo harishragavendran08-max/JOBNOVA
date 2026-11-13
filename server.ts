@@ -146,6 +146,46 @@ async function startServer() {
     });
   });
 
+  app.get('/api/jobs/:id', (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: 'Job id must be a positive integer.' });
+      return;
+    }
+    const found = jobsStore.find((j) => j.id === id);
+    if (!found) {
+      res.status(404).json({ error: `Job not found for id=${id}` });
+      return;
+    }
+    res.json(found);
+  });
+
+  app.delete('/api/jobs/:id', (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      res.status(400).json({ error: 'Job id must be a positive integer.' });
+      return;
+    }
+    const exists = jobsStore.some((j) => j.id === id);
+    if (!exists) {
+      res.status(404).json({ error: `Job not found for id=${id}` });
+      return;
+    }
+    jobsStore = jobsStore.filter((j) => j.id !== id);
+    res.json({ deletedId: id, remainingCount: jobsStore.length });
+  });
+
+  app.get('/api/health', (_req, res) => {
+    res.json({
+      status: 'UP',
+      service: 'jobnova-fullstack-api',
+      jobsCount: jobsStore.length,
+      internshipsCount: internshipsStore.length,
+      alertsCount: userAlertsStore.length,
+      timestamp: new Date().toISOString()
+    });
+  });
+
   // 1.5 UserAlerts Store (/api/user-alerts)
   app.get('/api/user-alerts', (_req, res) => {
     res.json({ alerts: userAlertsStore });

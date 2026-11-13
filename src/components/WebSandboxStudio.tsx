@@ -1,8 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Check,
+  Copy,
   FileCode,
+  Monitor,
   Play,
   RotateCcw,
+  Smartphone,
   Terminal,
   Trash2
 } from 'lucide-react';
@@ -20,7 +24,11 @@ interface ConsoleLogEntry {
 
 type EditorPane = 'html' | 'css' | 'js';
 
-export const WebSandboxStudio: React.FC = () => {
+interface WebSandboxStudioProps {
+  onApiMutated?: () => void;
+}
+
+export const WebSandboxStudio: React.FC<WebSandboxStudioProps> = ({ onApiMutated }) => {
   const [selectedPresetId, setSelectedPresetId] = useState<string>(WEB_SANDBOX_PRESETS[0].id);
   const [activePane, setActivePane] = useState<EditorPane>('html');
   const [htmlCode, setHtmlCode] = useState<string>(WEB_SANDBOX_PRESETS[0].html);
@@ -28,6 +36,20 @@ export const WebSandboxStudio: React.FC = () => {
   const [jsCode, setJsCode] = useState<string>(WEB_SANDBOX_PRESETS[0].js);
   const [runNonce, setRunNonce] = useState<number>(1);
   const [consoleLogs, setConsoleLogs] = useState<ConsoleLogEntry[]>([]);
+  const [previewMode, setPreviewMode] = useState<'desktop' | 'mobile'>('desktop');
+  const [copiedPane, setCopiedPane] = useState(false);
+
+  const onApiMutatedRef = useRef(onApiMutated);
+  onApiMutatedRef.current = onApiMutated;
+  const copyTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimerRef.current !== null) {
+        window.clearTimeout(copyTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const handleMessage = async (event: MessageEvent) => {
@@ -42,15 +64,20 @@ export const WebSandboxStudio: React.FC = () => {
         ]);
       } else if (event.data && event.data.type === 'JOBNOVA_SANDBOX_FETCH_REQ') {
         const { reqId, url, options } = event.data;
+        const target = event.source as Window | null;
         try {
           const res = await fetch(String(url), options);
           const data = await res.json();
-          event.source?.postMessage(
+          const method = String(options?.method || 'GET').toUpperCase();
+          if (res.ok && (method === 'POST' || method === 'DELETE') && onApiMutatedRef.current) {
+            onApiMutatedRef.current();
+          }
+          target?.postMessage(
             { type: 'JOBNOVA_SANDBOX_FETCH_RES', reqId, ok: res.ok, status: res.status, data },
-            { targetOrigin: '*' }
+            '*'
           );
         } catch (err) {
-          event.source?.postMessage(
+          target?.postMessage(
             {
               type: 'JOBNOVA_SANDBOX_FETCH_RES',
               reqId,
@@ -58,7 +85,7 @@ export const WebSandboxStudio: React.FC = () => {
               status: 500,
               error: err instanceof Error ? err.message : 'Fetch error'
             },
-            { targetOrigin: '*' }
+            '*'
           );
         }
       }
@@ -105,6 +132,20 @@ export const WebSandboxStudio: React.FC = () => {
     if (activePane === 'html') setHtmlCode(val);
     else if (activePane === 'css') setCssCode(val);
     else setJsCode(val);
+  };
+
+  const handleCopyActiveFile = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(currentEditorValue).catch(() => {});
+    }
+    setCopiedPane(true);
+    if (copyTimerRef.current !== null) {
+      window.clearTimeout(copyTimerRef.current);
+    }
+    copyTimerRef.current = window.setTimeout(() => {
+      setCopiedPane(false);
+      copyTimerRef.current = null;
+    }, 1800);
   };
 
   return (
@@ -194,6 +235,15 @@ export const WebSandboxStudio: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
+                  data-testid="web-sandbox-copy-btn"
+                  onClick={handleCopyActiveFile}
+                  className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  {copiedPane ? <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{copiedPane ? 'Copied' : 'Copy'}</span>
+                </button>
+                <button
+                  type="button"
                   onClick={handleResetPreset}
                   className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 >
@@ -230,7 +280,7 @@ export const WebSandboxStudio: React.FC = () => {
             <span>
               Editing <strong className="font-mono">{activePane === 'html' ? 'index.html' : activePane === 'css' ? 'styles.css' : 'app.js'}</strong>
             </span>
-            <span className="font-mono">
+            <span className="font-mono tabular-nums">
               HTML {htmlCode.length}ch · CSS {cssCode.length}ch · JS {jsCode.length}ch
             </span>
           </div>
@@ -239,23 +289,49 @@ export const WebSandboxStudio: React.FC = () => {
         {/* Right: Live Rendered Preview + Console Output */}
         <div className="lg:col-span-6 space-y-4">
           <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-3 shadow-xs">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-900 dark:text-slate-100 font-mono flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-bold text-slate-900 dark:text-slate-100 font-mono">
                 Live Rendered Output
               </span>
-              <span className="text-[11px] font-mono text-slate-400">
-                Sandboxed HTML5 + CSS3 + JS
-              </span>
+              <div className="flex items-center gap-1 p-0.5 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg" role="group" aria-label="Preview viewport width">
+                <button
+                  type="button"
+                  data-testid="web-sandbox-viewport-desktop"
+                  onClick={() => setPreviewMode('desktop')}
+                  className={`inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer ${
+                    previewMode === 'desktop'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  <Monitor className="w-3 h-3" />
+                  <span>Desktop</span>
+                </button>
+                <button
+                  type="button"
+                  data-testid="web-sandbox-viewport-mobile"
+                  onClick={() => setPreviewMode('mobile')}
+                  className={`inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer ${
+                    previewMode === 'mobile'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400'
+                  }`}
+                >
+                  <Smartphone className="w-3 h-3" />
+                  <span>375px</span>
+                </button>
+              </div>
             </div>
-            <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-hidden bg-white min-h-[300px]">
+            <div className="rounded-lg border border-slate-200 dark:border-slate-800 overflow-x-auto bg-slate-100 dark:bg-slate-950/60 min-h-[300px] flex justify-center">
               <iframe
                 key={runNonce}
                 title="Frontend Sandbox Live Render"
                 data-testid="web-sandbox-iframe"
                 srcDoc={compiledSrcDoc}
-                sandbox="allow-scripts"
-                className="w-full h-80 border-none"
+                sandbox="allow-scripts allow-forms"
+                className={`h-80 border-none bg-white transition-all duration-200 ${
+                  previewMode === 'mobile' ? 'w-[375px] max-w-full border-x border-slate-300 dark:border-slate-700' : 'w-full'
+                }`}
               />
             </div>
           </div>

@@ -13,14 +13,15 @@ import {
   generateSpringBootFullStackBundle,
   SPRING_BOOT_ANNOTATION_GUIDE,
   SPRING_BOOT_ENTITY_TEMPLATES,
-  SpringBootEntitySpec
+  SpringBootEntitySpec,
+  validateApiRequestBodyJson
 } from '../utils/fullStackCodeLabLogic';
 
 interface SpringBootGeneratorPanelProps {
   onJobsUpdated?: () => void;
 }
 
-type CodeLayerTab = 'entity' | 'repository' | 'controller' | 'mysql' | 'frontend';
+type CodeLayerTab = 'entity' | 'repository' | 'service' | 'controller' | 'mysql' | 'frontend' | 'react';
 
 interface ApiTestPreset {
   id: string;
@@ -41,12 +42,28 @@ const API_TEST_PRESETS: ApiTestPreset[] = [
       'Hibernate: select j1_0.id, j1_0.title, j1_0.company, j1_0.location, j1_0.skills, j1_0.ctc from jobs j1_0 order by j1_0.id asc'
   },
   {
+    id: 'get-job-by-id',
+    method: 'GET',
+    path: '/api/jobs/1',
+    label: 'Get Job by ID',
+    hibernateSql:
+      'Hibernate: select j1_0.id, j1_0.title, j1_0.company, j1_0.ctc from jobs j1_0 where j1_0.id=?'
+  },
+  {
     id: 'search-java',
     method: 'GET',
     path: '/api/jobs/search?skill=java',
     label: 'Filter Jobs by Java Skill',
     hibernateSql:
       "Hibernate: select j1_0.id, j1_0.title, j1_0.company, j1_0.skills from jobs j1_0 where lower(j1_0.skills) like '%java%'"
+  },
+  {
+    id: 'get-health',
+    method: 'GET',
+    path: '/api/health',
+    label: 'Backend Health Check',
+    hibernateSql:
+      'Spring Boot Actuator / Health: status=UP · database pool & repositories active'
   },
   {
     id: 'get-alerts',
@@ -97,6 +114,10 @@ export const SpringBootGeneratorPanel: React.FC<SpringBootGeneratorPanelProps> =
 
   // Interactive API Runner state
   const [selectedPresetId, setSelectedPresetId] = useState<string>(API_TEST_PRESETS[0].id);
+  const [customPostBody, setCustomPostBody] = useState<string>(() =>
+    JSON.stringify(API_TEST_PRESETS.find((p) => p.id === 'post-job')?.body || {}, null, 2)
+  );
+  const [bodyValidationError, setBodyValidationError] = useState<string | null>(null);
   const [isTestingApi, setIsTestingApi] = useState(false);
   const [apiResponse, setApiResponse] = useState<{
     status: number;
@@ -129,6 +150,11 @@ export const SpringBootGeneratorPanel: React.FC<SpringBootGeneratorPanelProps> =
           filename: `${activeTemplate.entityName}Repository.java`,
           code: bundle.repositoryJava
         };
+      case 'service':
+        return {
+          filename: `${activeTemplate.entityName}Service.java`,
+          code: bundle.serviceJava
+        };
       case 'controller':
         return {
           filename: `${activeTemplate.entityName}Controller.java`,
@@ -143,6 +169,11 @@ export const SpringBootGeneratorPanel: React.FC<SpringBootGeneratorPanelProps> =
         return {
           filename: `${activeTemplate.entityName.toLowerCase()}Client.js`,
           code: bundle.frontendJs
+        };
+      case 'react':
+        return {
+          filename: `${activeTemplate.entityName}Directory.jsx`,
+          code: bundle.reactComponentJsx
         };
     }
   }, [activeLayer, activeTemplate, bundle]);
@@ -160,15 +191,34 @@ export const SpringBootGeneratorPanel: React.FC<SpringBootGeneratorPanelProps> =
     setCustomEntityName(spec.entityName);
   };
 
+  const selectedPreset = useMemo(
+    () => API_TEST_PRESETS.find((p) => p.id === selectedPresetId) || API_TEST_PRESETS[0],
+    [selectedPresetId]
+  );
+
   const handleRunEndpointTest = async () => {
-    const preset = API_TEST_PRESETS.find((p) => p.id === selectedPresetId) || API_TEST_PRESETS[0];
+    const preset = selectedPreset;
+    let bodyPayload: Record<string, unknown> | undefined = preset.body;
+
+    if (preset.method === 'POST') {
+      const validation = validateApiRequestBodyJson(customPostBody);
+      if (!validation.valid) {
+        setBodyValidationError(validation.error);
+        return;
+      }
+      setBodyValidationError(null);
+      bodyPayload = validation.parsed;
+    } else {
+      setBodyValidationError(null);
+    }
+
     setIsTestingApi(true);
     const start = performance.now();
     try {
       const res = await fetch(preset.path, {
         method: preset.method,
         headers: preset.method === 'POST' ? { 'Content-Type': 'application/json' } : undefined,
-        body: preset.method === 'POST' ? JSON.stringify(preset.body) : undefined
+        body: preset.method === 'POST' ? JSON.stringify(bodyPayload) : undefined
       });
       const json = await res.json();
       const durationMs = Math.max(1, Math.round(performance.now() - start));
@@ -267,11 +317,13 @@ export const SpringBootGeneratorPanel: React.FC<SpringBootGeneratorPanelProps> =
             <div className="flex flex-wrap items-center gap-1" role="tablist" aria-label="Generated full-stack source files">
               {(
                 [
-                  { id: 'entity', label: '1. Entity.java (JPA)' },
+                  { id: 'entity', label: '1. Entity.java' },
                   { id: 'repository', label: '2. Repository.java' },
-                  { id: 'controller', label: '3. Controller.java' },
-                  { id: 'mysql', label: '4. schema.sql (MySQL)' },
-                  { id: 'frontend', label: '5. fetchClient.js' }
+                  { id: 'service', label: '3. Service.java' },
+                  { id: 'controller', label: '4. Controller.java' },
+                  { id: 'mysql', label: '5. schema.sql' },
+                  { id: 'frontend', label: '6. fetchClient.js' },
+                  { id: 'react', label: '7. ReactWidget.jsx' }
                 ] as const
               ).map((tab) => (
                 <button
@@ -281,7 +333,7 @@ export const SpringBootGeneratorPanel: React.FC<SpringBootGeneratorPanelProps> =
                   aria-selected={activeLayer === tab.id}
                   data-testid={`sb-layer-tab-${tab.id}`}
                   onClick={() => setActiveLayer(tab.id)}
-                  className={`px-2.5 py-1 text-xs font-mono font-semibold rounded-md transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1 text-xs font-mono font-semibold rounded-md transition-colors cursor-pointer whitespace-nowrap ${
                     activeLayer === tab.id
                       ? 'bg-indigo-600 text-white'
                       : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/70 dark:hover:bg-slate-800'
@@ -385,6 +437,49 @@ export const SpringBootGeneratorPanel: React.FC<SpringBootGeneratorPanelProps> =
           ))}
         </div>
 
+        {selectedPreset.method === 'POST' && (
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label
+                htmlFor="sb-api-body-textarea"
+                className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                Editable JSON Request Body (validates title, company &amp; skills)
+              </label>
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomPostBody(JSON.stringify(selectedPreset.body || {}, null, 2));
+                  setBodyValidationError(null);
+                }}
+                className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+              >
+                Reset sample JSON
+              </button>
+            </div>
+            <textarea
+              id="sb-api-body-textarea"
+              data-testid="sb-api-body-textarea"
+              rows={6}
+              value={customPostBody}
+              onChange={(e) => {
+                setCustomPostBody(e.target.value);
+                if (bodyValidationError) setBodyValidationError(null);
+              }}
+              spellCheck={false}
+              className="w-full p-3 text-xs font-mono bg-slate-950 text-emerald-400 rounded-lg border border-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600 leading-relaxed resize-y"
+            />
+            {bodyValidationError && (
+              <p
+                data-testid="sb-api-body-error"
+                className="text-xs font-medium text-rose-600 dark:text-rose-400"
+              >
+                {bodyValidationError}
+              </p>
+            )}
+          </div>
+        )}
+
         {apiResponse && (
           <div
             data-testid="sb-api-response-box"
@@ -412,6 +507,76 @@ export const SpringBootGeneratorPanel: React.FC<SpringBootGeneratorPanelProps> =
             </pre>
           </div>
         )}
+      </div>
+
+      {/* 2.5 Full-Stack Project Readiness Matrix */}
+      <div
+        data-testid="sb-project-readiness-panel"
+        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-4 shadow-xs"
+      >
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div>
+            <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+              Project Readiness Summary
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400">
+              Live React + TypeScript + REST platform is ready now; external standalone Java/MySQL setup applies only if self-hosting separately.
+            </p>
+          </div>
+          <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 whitespace-nowrap">
+            Ready in Preview
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+          <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 space-y-1">
+            <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+              Frontend (React + HTML/CSS/JS)
+            </div>
+            <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+              Ready
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              Jobs explorer, auth views, resume builder, light/dark themes, and live HTML/CSS/JS sandbox.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 space-y-1">
+            <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+              REST API &amp; Java Business Logic
+            </div>
+            <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+              Ready
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              Live /api/jobs, /api/user-alerts, /api/health, plus generated Entity, Service, and Controller layers.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 space-y-1">
+            <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+              MySQL Workbench &amp; Schemas
+            </div>
+            <div className="text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+              Ready (In-Session)
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              Stateful SQL queries and DDL schema export run in-browser; point JDBC URL to MySQL 8.0 for disk persistence.
+            </p>
+          </div>
+
+          <div className="p-3.5 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/60 space-y-1">
+            <div className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+              Standalone Java Deployment
+            </div>
+            <div className="text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+              Optional Local Step
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              Unzip the Spring Boot archive, set MySQL credentials in application.properties, and run mvn spring-boot:run.
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* 3. Spring Boot 3.5 & Java 17 Architectural Contract Reference */}

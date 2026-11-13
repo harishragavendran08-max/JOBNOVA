@@ -1213,9 +1213,11 @@ export interface SpringBootEntitySpec {
 export interface GeneratedSpringBootBundle {
   entityJava: string;
   repositoryJava: string;
+  serviceJava: string;
   controllerJava: string;
   mysqlDdl: string;
   frontendJs: string;
+  reactComponentJsx: string;
   hibernateSqlTrace: string;
 }
 
@@ -1297,10 +1299,13 @@ export function generateSpringBootFullStackBundle(spec: SpringBootEntitySpec): G
   const firstStringCap = capitalize(firstStringField);
 
   const entityFields = spec.fields
-    .map(
-      (f) =>
-        `    @Column(name = "${toSnakeCase(f.name)}", nullable = false)\n    private ${f.javaType} ${f.name};`
-    )
+    .map((f) => {
+      const validationAnnotation =
+        f.javaType === 'String'
+          ? `    @NotBlank(message = "${f.name} is required")`
+          : `    @NotNull(message = "${f.name} is required")`;
+      return `${validationAnnotation}\n    @Column(name = "${toSnakeCase(f.name)}", nullable = false)\n    private ${f.javaType} ${f.name};`;
+    })
     .join('\n\n');
 
   const gettersSetters = spec.fields
@@ -1313,6 +1318,8 @@ export function generateSpringBootFullStackBundle(spec: SpringBootEntitySpec): G
   const entityJava = `package com.jobnova.model;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 
 @Entity
 @Table(name = "${table}")
@@ -1348,13 +1355,67 @@ public interface ${entity}Repository extends JpaRepository<${entity}, Long> {
     List<${entity}> findRecentRecords(@Param("limit") int limit);
 }`;
 
-  const controllerJava = `package com.jobnova.controller;
+  const firstStringGetter = `get${firstStringCap}()`;
+  const serviceJava = `package com.jobnova.service;
 
 import com.jobnova.model.${entity};
 import com.jobnova.repository.${entity}Repository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import java.util.Comparator;
+import java.util.List;
+
+@Service
+public class ${entity}Service {
+    private final ${entity}Repository repository;
+
+    public ${entity}Service(${entity}Repository repository) {
+        this.repository = repository;
+    }
+
+    @Transactional(readOnly = true)
+    public List<${entity}> findAllOrdered() {
+        return repository.findAll().stream()
+                .sorted(Comparator.comparing(${entity}::getId, Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<${entity}> searchByKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return findAllOrdered();
+        }
+        String normalized = keyword.trim().toLowerCase();
+        return repository.findAll().stream()
+                .filter(item -> item.${firstStringGetter} != null
+                        && item.${firstStringGetter}.toLowerCase().contains(normalized))
+                .toList();
+    }
+
+    @Transactional
+    public ${entity} createValidated(${entity} payload) {
+        if (payload == null || payload.${firstStringGetter} == null || payload.${firstStringGetter}.isBlank()) {
+            throw new IllegalArgumentException("${firstStringField} must not be empty");
+        }
+        return repository.save(payload);
+    }
+
+    @Transactional
+    public void deleteById(Long id) {
+        if (!repository.existsById(id)) {
+            throw new IllegalArgumentException("${entity} not found for id=" + id);
+        }
+        repository.deleteById(id);
+    }
+}`;
+
+  const controllerJava = `package com.jobnova.controller;
+
+import com.jobnova.model.${entity};
+import com.jobnova.service.${entity}Service;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
@@ -1362,29 +1423,26 @@ import java.util.List;
 @RequestMapping("${spec.endpointPath}")
 @CrossOrigin(origins = "http://localhost:3000")
 public class ${entity}Controller {
-    private final ${entity}Repository repository;
+    private final ${entity}Service service;
 
-    public ${entity}Controller(${entity}Repository repository) {
-        this.repository = repository;
+    public ${entity}Controller(${entity}Service service) {
+        this.service = service;
     }
 
     @GetMapping
-    @Transactional(readOnly = true)
-    public List<${entity}> listAll() {
-        return repository.findAll();
+    public List<${entity}> listAll(@RequestParam(required = false) String q) {
+        return service.searchByKeyword(q);
     }
 
     @PostMapping
-    @Transactional
-    public ResponseEntity<${entity}> create(@RequestBody ${entity} payload) {
-        ${entity} saved = repository.save(payload);
+    public ResponseEntity<${entity}> create(@Valid @RequestBody ${entity} payload) {
+        ${entity} saved = service.createValidated(payload);
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
     }
 
     @DeleteMapping("/{id}")
-    @Transactional
     public ResponseEntity<Void> remove(@PathVariable Long id) {
-        repository.deleteById(id);
+        service.deleteById(id);
         return ResponseEntity.noContent().build();
     }
 }`;
@@ -1417,7 +1475,71 @@ async function create${entity}(payload) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || 'Request failed');
+  }
   return res.json();
+}`;
+
+  const displayField = spec.fields[0]?.name || 'id';
+  const secondaryField = spec.fields[1]?.name || displayField;
+  const reactComponentJsx = `import React, { useEffect, useState } from 'react';
+
+export function ${entity}Directory() {
+  const [items, setItems] = useState([]);
+  const [query, setQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    fetch('${spec.endpointPath}')
+      .then((res) => {
+        if (!res.ok) throw new Error('Failed to load ${table}');
+        return res.json();
+      })
+      .then((data) => {
+        if (active) {
+          setItems(Array.isArray(data) ? data : (data.alerts || []));
+          setLoading(false);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setError(err.message);
+          setLoading(false);
+        }
+      });
+    return () => { active = false; };
+  }, []);
+
+  const filtered = items.filter((item) =>
+    String(item.${displayField} || '').toLowerCase().includes(query.trim().toLowerCase())
+  );
+
+  if (loading) return <p className="text-sm text-slate-500">Loading ${table}...</p>;
+  if (error) return <p className="text-sm text-rose-600">{error}</p>;
+
+  return (
+    <section className="space-y-3">
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Filter ${table}..."
+        className="px-3 py-2 text-sm border border-slate-300 rounded-lg w-full"
+      />
+      <ul className="divide-y divide-slate-200 border border-slate-200 rounded-lg">
+        {filtered.map((row) => (
+          <li key={row.id} className="p-3 flex items-center justify-between text-sm">
+            <span className="font-semibold">{row.${displayField}}</span>
+            <span className="text-slate-500">{String(row.${secondaryField} || '')}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
 }`;
 
   const selectCols = ['id', ...spec.fields.map((f) => toSnakeCase(f.name))].join(', ');
@@ -1426,11 +1548,34 @@ async function create${entity}(payload) {
   return {
     entityJava,
     repositoryJava,
+    serviceJava,
     controllerJava,
     mysqlDdl,
     frontendJs,
+    reactComponentJsx,
     hibernateSqlTrace
   };
+}
+
+export function validateApiRequestBodyJson(
+  rawJson: string
+): { valid: true; parsed: Record<string, unknown> } | { valid: false; error: string } {
+  const trimmed = rawJson.trim();
+  if (!trimmed) {
+    return { valid: false, error: 'Request JSON body cannot be empty.' };
+  }
+  try {
+    const parsed = JSON.parse(trimmed);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { valid: false, error: 'Request body must be a JSON object.' };
+    }
+    return { valid: true, parsed: parsed as Record<string, unknown> };
+  } catch (err) {
+    return {
+      valid: false,
+      error: err instanceof Error ? `Invalid JSON: ${err.message}` : 'Invalid JSON payload.'
+    };
+  }
 }
 
 // ==================== HTML5 + CSS3 + JAVASCRIPT SANDBOX ====================
@@ -1559,6 +1704,67 @@ buttons.forEach((btn) => {
     log.textContent = 'Stage updated to: ' + stage;
     console.log('Pipeline stage changed ->', stage);
   });
+});`
+  },
+  {
+    id: 'spring-job-publisher',
+    name: 'Spring Boot Job Publisher (HTML5 Form + POST)',
+    description: 'Submits a validated HTML5 form via JavaScript POST /api/jobs to create a live backend job record.',
+    html: `<section class="publisher">
+  <header class="head">
+    <h2>Publish Engineering Job</h2>
+    <p>HTML5 validation + CSS3 form grid + JS POST /api/jobs</p>
+  </header>
+  <form id="job-form" class="form-grid">
+    <label>Role Title <input id="f-title" required value="Java Spring Boot Developer" /></label>
+    <label>Company <input id="f-company" required value="Zoho" /></label>
+    <label>Location <input id="f-location" required value="Chennai" /></label>
+    <label>CTC Benchmark <input id="f-ctc" required value="12.0 LPA" /></label>
+    <label class="full">Tech Stack <input id="f-skills" required value="java,springboot,mysql,react" /></label>
+    <button type="submit" class="btn">Publish to /api/jobs</button>
+  </form>
+  <div id="publish-result" class="result">Ready to POST validated payload to backend store.</div>
+</section>`,
+    css: `* { box-sizing: border-box; }
+body { margin: 0; padding: 18px; font-family: system-ui, sans-serif; background: #f5f6f8; color: #0f172a; }
+.publisher { max-width: 620px; margin: 0 auto; background: #fff; border: 1.5px solid #cbd5e1; border-radius: 10px; padding: 18px; }
+.head h2 { margin: 0; font-size: 17px; }
+.head p { margin: 4px 0 14px; font-size: 12px; color: #475569; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; font-weight: 600; color: #334155; }
+label.full { grid-column: 1 / -1; }
+input { padding: 8px 10px; border: 1.5px solid #94a3b8; border-radius: 7px; font-size: 13px; }
+.btn { grid-column: 1 / -1; margin-top: 4px; padding: 10px 14px; border: none; border-radius: 8px; background: #2557A7; color: #fff; font-weight: 700; cursor: pointer; }
+.btn:hover { background: #164081; }
+.result { margin-top: 12px; padding: 10px; border-radius: 8px; background: #f8fafc; border: 1px solid #cbd5e1; font-size: 12px; font-family: monospace; color: #087F31; }`,
+    js: `const form = document.getElementById('job-form');
+const output = document.getElementById('publish-result');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const payload = {
+    title: document.getElementById('f-title').value.trim(),
+    company: document.getElementById('f-company').value.trim(),
+    location: document.getElementById('f-location').value.trim(),
+    ctc: document.getElementById('f-ctc').value.trim(),
+    skills: document.getElementById('f-skills').value.trim(),
+    type: 'Full-Time'
+  };
+  output.textContent = 'Sending POST /api/jobs...';
+  try {
+    const res = await fetch('/api/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Validation failed');
+    output.textContent = 'Created Job #' + data.job.id + ': ' + data.job.title + ' at ' + data.job.company;
+    console.log('POST /api/jobs -> HTTP', res.status, 'id=' + data.job.id);
+  } catch (err) {
+    output.textContent = 'Error: ' + err.message;
+    console.error('Publish failed:', err.message);
+  }
 });`
   }
 ];

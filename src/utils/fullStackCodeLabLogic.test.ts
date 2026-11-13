@@ -13,6 +13,7 @@ import {
   FULL_STACK_CHALLENGES,
   SPRING_BOOT_ANNOTATION_GUIDE,
   SPRING_BOOT_ENTITY_TEMPLATES,
+  validateApiRequestBodyJson,
   WEB_SANDBOX_PRESETS
 } from './fullStackCodeLabLogic';
 
@@ -115,20 +116,45 @@ test('executeStatefulMySqlQuery supports INSERT, UPDATE, DELETE, CREATE TABLE, a
   assert.equal(db.tables.jobs.length, initialCount);
 });
 
-test('generateSpringBootFullStackBundle produces synchronized Java, Spring Boot, MySQL DDL, and JS client code', () => {
+test('generateSpringBootFullStackBundle produces synchronized Java Entity, Service, Controller, MySQL DDL, JS & React code', () => {
   const jobSpec = SPRING_BOOT_ENTITY_TEMPLATES[0];
   const bundle = generateSpringBootFullStackBundle(jobSpec);
 
   assert.ok(bundle.entityJava.includes('@Entity'));
+  assert.ok(bundle.entityJava.includes('@NotBlank'));
   assert.ok(bundle.entityJava.includes('@Table(name = "jobs")'));
   assert.ok(bundle.repositoryJava.includes('extends JpaRepository<Job, Long>'));
+  assert.ok(bundle.serviceJava.includes('@Service'));
+  assert.ok(bundle.serviceJava.includes('.stream()'));
+  assert.ok(bundle.serviceJava.includes('IllegalArgumentException'));
   assert.ok(bundle.controllerJava.includes('@RestController'));
+  assert.ok(bundle.controllerJava.includes('JobService'));
+  assert.ok(bundle.controllerJava.includes('@Valid @RequestBody'));
   assert.ok(bundle.controllerJava.includes('@RequestMapping("/api/jobs")'));
   assert.ok(bundle.mysqlDdl.includes('CREATE TABLE IF NOT EXISTS `jobs`'));
   assert.ok(bundle.frontendJs.includes("fetch('/api/jobs')"));
+  assert.ok(bundle.reactComponentJsx.includes('export function JobDirectory()'));
+  assert.ok(bundle.reactComponentJsx.includes('useEffect'));
 });
 
-test('compileWebSandboxDocument bundles HTML5, CSS3, and JavaScript with console bridge safely', () => {
+test('validateApiRequestBodyJson parses valid JSON objects and rejects malformed or non-object payloads', () => {
+  const ok = validateApiRequestBodyJson('{"title":"Java Dev","company":"Zoho"}');
+  assert.equal(ok.valid, true);
+  if (ok.valid) {
+    assert.equal(ok.parsed.company, 'Zoho');
+  }
+
+  const empty = validateApiRequestBodyJson('   ');
+  assert.equal(empty.valid, false);
+
+  const arrayBody = validateApiRequestBodyJson('[1, 2, 3]');
+  assert.equal(arrayBody.valid, false);
+
+  const malformed = validateApiRequestBodyJson('{bad json');
+  assert.equal(malformed.valid, false);
+});
+
+test('compileWebSandboxDocument bundles HTML5, CSS3, and JavaScript presets including Spring Boot Publisher', () => {
   const preset = WEB_SANDBOX_PRESETS[0];
   const doc = compileWebSandboxDocument({
     html: preset.html,
@@ -141,6 +167,10 @@ test('compileWebSandboxDocument bundles HTML5, CSS3, and JavaScript with console
   assert.ok(doc.includes(preset.html));
   assert.ok(doc.includes('JOBNOVA_SANDBOX_CONSOLE'));
   assert.ok(doc.includes('<\\/script>'));
+
+  const publisherPreset = WEB_SANDBOX_PRESETS.find((p) => p.id === 'spring-job-publisher');
+  assert.ok(publisherPreset);
+  assert.ok(publisherPreset.js.includes('/api/jobs'));
 });
 
 test('evaluateFullStackChallenge grades code against solution keywords accurately', () => {
