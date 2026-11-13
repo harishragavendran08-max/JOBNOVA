@@ -7,6 +7,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
   Award,
+  Bell,
+  BellRing,
   Bookmark,
   BookOpen,
   Briefcase,
@@ -17,6 +19,7 @@ import {
   ExternalLink,
   FileDown,
   GraduationCap,
+  Lightbulb,
   Link2,
   Mail,
   MapPin,
@@ -63,7 +66,12 @@ import {
   updateApplicationStageRecord,
   updateInterviewScheduleRecord
 } from './utils/jobnovaLogic';
-import { computeJobMatchBreakdown } from './utils/marketplaceHelpers';
+import {
+  computeJobMatchBreakdown,
+  getCopyLinkFeedbackMeta,
+  JobSortOption,
+  sortJobsList
+} from './utils/marketplaceHelpers';
 import { ActiveTab, Navbar } from './components/Navbar';
 import { CareerAssistantView } from './components/CareerAssistantView';
 import { ProfileSettingsView } from './components/ProfileSettingsView';
@@ -75,7 +83,19 @@ import { FullStackCodeLabView } from './components/FullStackCodeLabView';
 import { ResumeBuilderView } from './components/ResumeBuilderView';
 import { LoginView } from './components/LoginView';
 import { SignUpView } from './components/SignUpView';
+import { UserAlertsPanel } from './components/UserAlertsPanel';
+import { QuickInterviewTipsModal } from './components/QuickInterviewTipsModal';
+import { generateQuickInterviewTips } from './utils/quickInterviewTipsLogic';
 import { getPathnameForTab, resolveTabFromPathname } from './utils/authLogic';
+import {
+  createUserAlertFromJob,
+  dispatchBrowserPushNotification,
+  findAlertForJob,
+  findMatchingAlertsForNewJob,
+  parseJobSkills,
+  recordAlertJobMatches,
+  UserAlertRecord
+} from './utils/userAlertsLogic';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>(() =>
@@ -124,6 +144,7 @@ export default function App() {
   const [jobSkillQuery, setJobSkillQuery] = useState('');
   const [jobLocationFilter, setJobLocationFilter] = useState('ALL');
   const [showSavedJobsOnly, setShowSavedJobsOnly] = useState(false);
+  const [jobSortBy, setJobSortBy] = useState<JobSortOption>('featured');
   const [selectedJobId, setSelectedJobId] = useState<number>(SEED_JOBS[0].id);
   const [bookmarkedJobIds, setBookmarkedJobIds] = useState<number[]>(() => {
     try {
@@ -136,9 +157,32 @@ export default function App() {
     }
     return [];
   });
+  const [userAlerts, setUserAlerts] = useState<UserAlertRecord[]>(() => {
+    try {
+      const cached = localStorage.getItem('jobnova_user_alerts');
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch {
+      // Ignore storage read errors
+    }
+    return [];
+  });
+  const [isAlertsPanelOpen, setIsAlertsPanelOpen] = useState(false);
+  const [browserPushPermission, setBrowserPushPermission] = useState<string>(() => {
+    if (typeof window !== 'undefined' && typeof Notification !== 'undefined') {
+      return Notification.permission;
+    }
+    return 'unsupported';
+  });
   const [copiedShareKey, setCopiedShareKey] = useState<string | null>(null);
+  const [copiedJobLinkId, setCopiedJobLinkId] = useState<number | null>(null);
   const [isShareMenuOpen, setIsShareMenuOpen] = useState(false);
+  const [isQuickTipsModalOpen, setIsQuickTipsModalOpen] = useState(false);
   const shareMenuRef = useRef<HTMLDivElement | null>(null);
+  const copyLinkTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const shareMenuCloseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [internQuery, setInternQuery] = useState('');
   const [internLocationFilter, setInternLocationFilter] = useState('ALL');
@@ -196,7 +240,24 @@ export default function App() {
 
   useEffect(() => {
     setIsShareMenuOpen(false);
+    setIsQuickTipsModalOpen(false);
+    setCopiedJobLinkId(null);
+    if (copyLinkTimerRef.current) {
+      clearTimeout(copyLinkTimerRef.current);
+      copyLinkTimerRef.current = null;
+    }
+    if (shareMenuCloseTimerRef.current) {
+      clearTimeout(shareMenuCloseTimerRef.current);
+      shareMenuCloseTimerRef.current = null;
+    }
   }, [selectedJobId, activeTab]);
+
+  useEffect(() => {
+    return () => {
+      if (copyLinkTimerRef.current) clearTimeout(copyLinkTimerRef.current);
+      if (shareMenuCloseTimerRef.current) clearTimeout(shareMenuCloseTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isShareMenuOpen) return;
@@ -230,27 +291,37 @@ export default function App() {
     return () => clearTimeout(timer);
   }, [toastMessage]);
 
-  // Sync dark mode class on <html>
+  // Sync dark mode class, data-theme, and color-scheme on <html>
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', settings.theme === 'dark');
+    const isDark = settings.theme === 'dark';
+    document.documentElement.classList.toggle('dark', isDark);
+    document.documentElement.dataset.theme = settings.theme;
+    document.documentElement.style.colorScheme = settings.theme;
   }, [settings.theme]);
 
   // Fetch initial data from Express API routes matching Spring Boot controllers
   useEffect(() => {
     async function loadInitialData() {
       try {
-        const [jobsRes, internsRes, coursesRes, certsRes, userRes] = await Promise.all([
+        const [jobsRes, internsRes, coursesRes, certsRes, userRes, alertsRes] = await Promise.all([
           fetch('/api/jobs'),
           fetch('/api/internships'),
           fetch('/api/courses'),
           fetch('/api/certifications'),
-          fetch('/user')
+          fetch('/user'),
+          fetch('/api/user-alerts')
         ]);
 
         if (jobsRes.ok) setJobs(await jobsRes.json());
         if (internsRes.ok) setInternships(await internsRes.json());
         if (coursesRes.ok) setCourses(await coursesRes.json());
         if (certsRes.ok) setCertifications(await certsRes.json());
+        if (alertsRes.ok) {
+          const alertsPayload = await alertsRes.json();
+          if (Array.isArray(alertsPayload?.alerts) && alertsPayload.alerts.length > 0) {
+            setUserAlerts(alertsPayload.alerts);
+          }
+        }
         if (userRes.ok) {
           const userData = await userRes.json();
           if (userData && userData.authenticated !== false) {
@@ -322,6 +393,182 @@ export default function App() {
         ? `Removed "${job.title}" at ${job.company} from Saved Jobs.`
         : `Saved "${job.title}" at ${job.company} to Saved Jobs.`
     );
+  };
+
+  const persistUserAlerts = (nextAlerts: UserAlertRecord[]) => {
+    setUserAlerts(nextAlerts);
+    try {
+      localStorage.setItem('jobnova_user_alerts', JSON.stringify(nextAlerts));
+    } catch {
+      // Ignore storage write errors
+    }
+  };
+
+  const handleRequestBrowserPushPermission = async () => {
+    if (typeof window === 'undefined' || typeof Notification === 'undefined') {
+      setBrowserPushPermission('unsupported');
+      showToast('Browser Notification API is unavailable in this environment; in-app alerts remain active.');
+      return;
+    }
+    try {
+      const permission = await Notification.requestPermission();
+      setBrowserPushPermission(permission);
+      showToast(
+        permission === 'granted'
+          ? 'Browser push notifications enabled for UserAlerts!'
+          : `Browser push permission is "${permission}". In-app alerts remain active.`
+      );
+    } catch {
+      showToast('Unable to request browser notification permission right now.');
+    }
+  };
+
+  const handleToggleGetNotified = async (job: JobItem) => {
+    const existing = findAlertForJob(userAlerts, job);
+    if (existing) {
+      const next = userAlerts.filter((a) => a.id !== existing.id);
+      persistUserAlerts(next);
+      try {
+        await fetch(`/api/user-alerts/${encodeURIComponent(existing.id)}`, {
+          method: 'DELETE'
+        });
+      } catch {
+        // Ignore network errors
+      }
+      showToast(`Removed UserAlerts subscription for "${job.title}" skills.`);
+      return;
+    }
+
+    let currentPermission = browserPushPermission;
+    if (
+      settings.pushNotifications &&
+      typeof window !== 'undefined' &&
+      typeof Notification !== 'undefined' &&
+      Notification.permission === 'default'
+    ) {
+      try {
+        currentPermission = await Notification.requestPermission();
+        setBrowserPushPermission(currentPermission);
+      } catch {
+        // Safe fallback in automated/iframe browsers
+      }
+    }
+
+    let createdAlert = createUserAlertFromJob({
+      job,
+      userEmail: user?.email,
+      pushEnabled: settings.pushNotifications,
+      browserPermission: currentPermission
+    });
+
+    try {
+      const res = await fetch('/api/user-alerts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          job,
+          userEmail: user?.email,
+          pushEnabled: settings.pushNotifications,
+          browserPermission: currentPermission
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.alert) {
+          createdAlert = data.alert;
+        }
+        if (Array.isArray(data?.alerts)) {
+          persistUserAlerts(data.alerts);
+        } else {
+          persistUserAlerts([createdAlert, ...userAlerts]);
+        }
+      } else {
+        persistUserAlerts([createdAlert, ...userAlerts]);
+      }
+    } catch {
+      persistUserAlerts([createdAlert, ...userAlerts]);
+    }
+
+    dispatchBrowserPushNotification({
+      title: `JobNova Alert Active: ${job.title}`,
+      body: `You'll be notified when similar roles (${createdAlert.skills.join(', ')}) are posted.`,
+      tag: `jobnova-alert-${createdAlert.id}`,
+      enabled: settings.pushNotifications
+    });
+
+    showToast(
+      `Added to UserAlerts! Watching ${createdAlert.skills.join(', ')} for browser push notifications.`
+    );
+  };
+
+  const handleDeleteUserAlert = async (alertId: string) => {
+    const next = userAlerts.filter((a) => a.id !== alertId);
+    persistUserAlerts(next);
+    try {
+      await fetch(`/api/user-alerts/${encodeURIComponent(alertId)}`, {
+        method: 'DELETE'
+      });
+    } catch {
+      // Ignore
+    }
+    showToast('Removed subscription from UserAlerts.');
+  };
+
+  const handleCreateJobAndNotify = async (payload: {
+    title: string;
+    company: string;
+    location: string;
+    description: string;
+    skills: string;
+    type: string;
+    ctc: string;
+  }) => {
+    let createdJob: JobItem | null = null;
+    try {
+      const res = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (res.ok) {
+        const data = await res.json();
+        createdJob = data.job;
+      }
+    } catch {
+      // Fallback below
+    }
+
+    if (!createdJob) {
+      const nextId = jobs.reduce((max, j) => Math.max(max, j.id), 0) + 1;
+      createdJob = { id: nextId, ...payload };
+    }
+
+    setJobs((prev) => [createdJob!, ...prev]);
+    setSelectedJobId(createdJob.id);
+
+    const matchedAlerts = findMatchingAlertsForNewJob(userAlerts, createdJob);
+    if (matchedAlerts.length > 0) {
+      const updatedAlerts = recordAlertJobMatches(userAlerts, matchedAlerts, createdJob.id);
+      persistUserAlerts(updatedAlerts);
+      const sharedSkillsList = Array.from(
+        new Set(matchedAlerts.flatMap((m) => m.sharedSkills))
+      );
+
+      dispatchBrowserPushNotification({
+        title: `New Matching Job: ${createdJob.title} at ${createdJob.company}`,
+        body: `Matches your UserAlerts skills (${sharedSkillsList.join(', ')}) · ${createdJob.location} · ${createdJob.ctc || 'Competitive CTC'}`,
+        tag: `jobnova-new-job-${createdJob.id}`,
+        enabled: settings.pushNotifications
+      });
+
+      showToast(
+        `Push Notification Triggered: "${createdJob.title}" at ${createdJob.company} matches ${matchedAlerts.length} UserAlert(s) (${sharedSkillsList.join(', ')})!`
+      );
+    } else {
+      showToast(
+        `Published "${createdJob.title}" at ${createdJob.company} (no matching UserAlerts skills).`
+      );
+    }
   };
 
   const handleUpdateApplicationStage = (
@@ -460,9 +707,13 @@ export default function App() {
 
   const handleToggleTheme = () => {
     const nextSettings = toggleThemeSetting(settings);
+    const isDark = nextSettings.theme === 'dark';
+    document.documentElement.classList.toggle('dark', isDark);
+    document.documentElement.dataset.theme = nextSettings.theme;
+    document.documentElement.style.colorScheme = nextSettings.theme;
     handleUpdateSettings(nextSettings);
     showToast(
-      `Switched to ${nextSettings.theme === 'dark' ? 'Dark Mode' : 'Light Mode'} (Saved in userSettings).`
+      `Switched to ${isDark ? 'Dark Mode' : 'Light Mode'} (Saved in userSettings).`
     );
   };
 
@@ -574,19 +825,25 @@ export default function App() {
     showToast('Signed out of JobNova session.');
   };
 
-  // Filtered collections
+  // Filtered & sorted collections
   const filteredJobs = filterJobsList(jobs, {
     query: jobSkillQuery,
     locationFilter: jobLocationFilter,
     onlySaved: showSavedJobsOnly,
     savedJobIds: bookmarkedJobIds
   });
+  const sortedJobs = sortJobsList(filteredJobs, {
+    sortBy: jobSortBy,
+    userSkills: user?.skills || DEFAULT_USER_PROFILE.skills,
+    expectedMinLpa: settings.expectedSalaryMinLpa,
+    expectedMaxLpa: settings.expectedSalaryMaxLpa
+  });
   const filteredInternships = filterInternships(internships, internQuery, internLocationFilter);
   const filteredCourses = filterCourses(courses, courseQuery, courseProviderFilter);
   const filteredCertifications = filterCertifications(certifications, certQuery, certIssuerFilter);
 
   const activeSelectedJob =
-    filteredJobs.find((j) => j.id === selectedJobId) || filteredJobs[0] || null;
+    sortedJobs.find((j) => j.id === selectedJobId) || sortedJobs[0] || null;
 
   const activeSelectedJobBreakdown = activeSelectedJob
     ? computeJobMatchBreakdown({
@@ -647,6 +904,43 @@ export default function App() {
     showToast(`Copied LinkedIn broadcast post for ${payload.title} at ${payload.company}!`);
   };
 
+  const handleCopyJobLink = (job: JobItem, targetUrl: string) => {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+      navigator.clipboard.writeText(targetUrl).catch(() => {});
+    } else if (typeof document !== 'undefined') {
+      const tempInput = document.createElement('textarea');
+      tempInput.value = targetUrl;
+      tempInput.setAttribute('readonly', '');
+      tempInput.style.position = 'fixed';
+      tempInput.style.opacity = '0';
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      try {
+        document.execCommand('copy');
+      } catch {
+        // Ignore fallback copy failure in restricted contexts
+      }
+      document.body.removeChild(tempInput);
+    }
+
+    if (copyLinkTimerRef.current) clearTimeout(copyLinkTimerRef.current);
+    if (shareMenuCloseTimerRef.current) clearTimeout(shareMenuCloseTimerRef.current);
+
+    setCopiedJobLinkId(job.id);
+    showToast(`Copied share link for ${job.title} at ${job.company}!`);
+
+    // Keep menu open briefly so the checked icon animation is clearly visible before closing
+    shareMenuCloseTimerRef.current = setTimeout(() => {
+      setIsShareMenuOpen(false);
+      shareMenuCloseTimerRef.current = null;
+    }, 950);
+
+    copyLinkTimerRef.current = setTimeout(() => {
+      setCopiedJobLinkId((current) => (current === job.id ? null : current));
+      copyLinkTimerRef.current = null;
+    }, 2400);
+  };
+
   const getCompanyMonogram = (company: string) => {
     const c = company.toLowerCase();
     if (c.includes('google')) {
@@ -674,7 +968,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f5f6f8] dark:bg-slate-950 text-slate-900 dark:text-slate-100">
+    <div className="min-h-screen flex flex-col overflow-x-clip bg-[#f5f6f8] dark:bg-slate-950 text-slate-900 dark:text-slate-100 theme-transition-surface transition-colors duration-200">
       <Navbar
         activeTab={activeTab}
         onSelectTab={navigateToTab}
@@ -700,7 +994,7 @@ export default function App() {
         </div>
       )}
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-6 py-8">
+      <main className="flex-1 min-w-0 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8">
         {/* ==================== 1. HOME / OVERVIEW MARKETPLACE VIEW ==================== */}
         {activeTab === 'home' && (
           <div className="space-y-8">
@@ -1179,13 +1473,13 @@ export default function App() {
                     Explore Engineering Jobs
                   </h1>
                   <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                    Showing <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">{filteredJobs.length}</span> of <span className="font-mono tabular-nums">{jobs.length}</span> open roles · Click any listing to inspect compensation &amp; skill match
+                    Showing <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">{sortedJobs.length}</span> of <span className="font-mono tabular-nums">{jobs.length}</span> open roles · Click any listing to inspect compensation &amp; skill match
                   </p>
                 </div>
 
-                {/* Search Input & Saved Jobs Filter Toggle */}
+                {/* Search Input, Sort Selector & Saved/Alerts Toggles */}
                 <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-                  <div className="relative flex-1 min-w-[210px] sm:w-80">
+                  <div className="relative flex-1 min-w-[200px] sm:w-72">
                     <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                     <label htmlFor="job-skill-search" className="sr-only">
                       Search jobs by skill, title, or company
@@ -1198,6 +1492,37 @@ export default function App() {
                       placeholder="Job title, skill (Python, GenAI, Go, Java, AWS, SQL), or company..."
                       className="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2557A7]"
                     />
+                  </div>
+
+                  <div>
+                    <label htmlFor="job-sort-select" className="sr-only">
+                      Sort jobs by
+                    </label>
+                    <select
+                      id="job-sort-select"
+                      data-testid="jobs-sort-select"
+                      aria-label="Sort jobs by"
+                      value={jobSortBy}
+                      onChange={(e) => {
+                        const nextSort = e.target.value as JobSortOption;
+                        setJobSortBy(nextSort);
+                        const nextList = sortJobsList(filteredJobs, {
+                          sortBy: nextSort,
+                          userSkills: user?.skills || DEFAULT_USER_PROFILE.skills,
+                          expectedMinLpa: settings.expectedSalaryMinLpa,
+                          expectedMaxLpa: settings.expectedSalaryMaxLpa
+                        });
+                        if (nextList.length > 0) {
+                          setSelectedJobId(nextList[0].id);
+                        }
+                      }}
+                      className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#2557A7] cursor-pointer"
+                    >
+                      <option value="featured">Sort: Featured</option>
+                      <option value="match-desc">Sort: Best Skill Match</option>
+                      <option value="ctc-desc">Sort: Highest Salary (LPA)</option>
+                      <option value="ctc-asc">Sort: Entry Salary (Low-High)</option>
+                    </select>
                   </div>
 
                   <button
@@ -1227,13 +1552,44 @@ export default function App() {
                     </span>
                   </button>
 
-                  {jobSkillQuery && (
+                  <button
+                    type="button"
+                    data-testid="jobs-alerts-toggle"
+                    aria-pressed={isAlertsPanelOpen}
+                    onClick={() => setIsAlertsPanelOpen((prev) => !prev)}
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                      isAlertsPanelOpen
+                        ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-[#2557A7] hover:text-[#2557A7] dark:hover:text-blue-400'
+                    }`}
+                  >
+                    <Bell className="w-3.5 h-3.5" />
+                    <span>UserAlerts</span>
+                    <span
+                      data-testid="jobs-alerts-count-badge"
+                      className={`px-1.5 py-0.5 text-[11px] font-mono rounded ${
+                        isAlertsPanelOpen
+                          ? 'bg-white/20 text-white dark:bg-slate-900/15 dark:text-slate-900'
+                          : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200'
+                      }`}
+                    >
+                      {userAlerts.length}
+                    </span>
+                  </button>
+
+                  {(jobSkillQuery || jobLocationFilter !== 'ALL' || showSavedJobsOnly || jobSortBy !== 'featured') && (
                     <button
                       type="button"
-                      onClick={() => setJobSkillQuery('')}
-                      className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg cursor-pointer"
+                      data-testid="jobs-reset-filters-btn"
+                      onClick={() => {
+                        setJobSkillQuery('');
+                        setJobLocationFilter('ALL');
+                        setShowSavedJobsOnly(false);
+                        setJobSortBy('featured');
+                      }}
+                      className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg cursor-pointer whitespace-nowrap"
                     >
-                      Clear
+                      Reset Filters
                     </button>
                   )}
                 </div>
@@ -1283,7 +1639,19 @@ export default function App() {
               </div>
             </div>
 
-            {filteredJobs.length === 0 ? (
+            {isAlertsPanelOpen && (
+              <UserAlertsPanel
+                alerts={userAlerts}
+                activeJob={activeSelectedJob}
+                browserPermission={browserPushPermission}
+                onRequestBrowserPermission={handleRequestBrowserPushPermission}
+                onDeleteAlert={handleDeleteUserAlert}
+                onCreateJobAndNotify={handleCreateJobAndNotify}
+                onClose={() => setIsAlertsPanelOpen(false)}
+              />
+            )}
+
+            {sortedJobs.length === 0 ? (
               <div
                 data-testid="jobs-empty-state"
                 className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-10 text-center space-y-3"
@@ -1329,7 +1697,7 @@ export default function App() {
                   role="list"
                   aria-label="Job listings feed"
                 >
-                  {filteredJobs.map((job) => {
+                  {sortedJobs.map((job) => {
                     const isSelected = activeSelectedJob?.id === job.id;
                     const isApplied = appliedJobIds.includes(job.id);
                     const isBookmarked = bookmarkedJobIds.includes(job.id);
@@ -1443,7 +1811,7 @@ export default function App() {
                   <aside
                     data-testid="job-detail-pane"
                     aria-label={`Job details for ${activeSelectedJob.title} at ${activeSelectedJob.company}`}
-                    className="lg:col-span-7 lg:sticky lg:top-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-visible"
+                    className="lg:col-span-7 lg:sticky lg:top-20 lg:z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-visible"
                   >
                     {/* Sticky Header inside Detail Pane */}
                     <div className="p-6 border-b border-slate-200 dark:border-slate-800 space-y-4">
@@ -1575,6 +1943,41 @@ export default function App() {
                               </span>
                             </button>
 
+                            {(() => {
+                              const existingAlert = findAlertForJob(userAlerts, activeSelectedJob);
+                              const isAlerted = Boolean(existingAlert);
+                              return (
+                                <button
+                                  type="button"
+                                  data-testid="job-detail-get-notified-btn"
+                                  aria-pressed={isAlerted}
+                                  aria-label={
+                                    isAlerted
+                                      ? `Unsubscribe from alerts for ${activeSelectedJob.title} skills`
+                                      : `Get notified for new jobs with skills like ${activeSelectedJob.skills}`
+                                  }
+                                  onClick={() => handleToggleGetNotified(activeSelectedJob)}
+                                  className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                                    isAlerted
+                                      ? 'border-[#087F31] bg-emerald-50 text-[#087F31] dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-300'
+                                      : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-[#2557A7] hover:text-[#2557A7] dark:hover:text-blue-400'
+                                  }`}
+                                >
+                                  {isAlerted ? (
+                                    <>
+                                      <BellRing className="w-3.5 h-3.5" />
+                                      <span>Notified ✓</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Bell className="w-3.5 h-3.5" />
+                                      <span>Get Notified</span>
+                                    </>
+                                  )}
+                                </button>
+                              );
+                            })()}
+
                             <a
                               data-testid="job-detail-linkedin-share"
                               href={shareLinks.linkedinUrl}
@@ -1608,160 +2011,238 @@ export default function App() {
                             </button>
 
                             {/* Share Icon + Multi-Channel Dropdown Menu */}
-                            <div ref={shareMenuRef} className="relative">
-                              <button
-                                type="button"
-                                data-testid="job-detail-share-btn"
-                                aria-haspopup="menu"
-                                aria-expanded={isShareMenuOpen}
-                                aria-label="Share job via Twitter, WhatsApp, Email, or LinkedIn"
-                                onClick={() => setIsShareMenuOpen((prev) => !prev)}
-                                className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-                                  isShareMenuOpen
-                                    ? 'border-[#2557A7] bg-blue-50 text-[#2557A7] dark:border-blue-400 dark:bg-blue-950/60 dark:text-blue-300'
-                                    : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-[#2557A7] hover:text-[#2557A7] dark:hover:text-blue-400'
-                                }`}
-                              >
-                                <Share2 className="w-3.5 h-3.5" />
-                                <span>Share</span>
-                                <ChevronDown
-                                  className={`w-3.5 h-3.5 transition-transform ${
-                                    isShareMenuOpen ? 'rotate-180' : ''
-                                  }`}
-                                />
-                              </button>
+                            {(() => {
+                              const copyLinkFeedback = getCopyLinkFeedbackMeta({
+                                copiedJobLinkId,
+                                jobId: activeSelectedJob.id,
+                                jobTitle: activeSelectedJob.title
+                              });
 
-                              {isShareMenuOpen && (
-                                <div
-                                  role="menu"
-                                  data-testid="job-detail-share-menu"
-                                  aria-label={`Share ${activeSelectedJob.title} at ${activeSelectedJob.company}`}
-                                  className="absolute right-0 top-full mt-2 w-56 sm:w-60 z-30 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg py-1.5"
-                                >
-                                  <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800">
-                                    <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                                      Share Job Listing
-                                    </span>
-                                  </div>
-
-                                  <a
-                                    role="menuitem"
-                                    data-testid="share-option-twitter"
-                                    href={shareLinks.twitterUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={() => {
-                                      setIsShareMenuOpen(false);
-                                      showToast(`Opening Twitter / X share for ${activeSelectedJob.title}`);
-                                    }}
-                                    className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#2557A7] dark:hover:text-blue-400 transition-colors"
-                                  >
-                                    <svg
-                                      viewBox="0 0 24 24"
-                                      fill="currentColor"
-                                      aria-hidden="true"
-                                      className="w-3.5 h-3.5 shrink-0 text-slate-900 dark:text-slate-100"
-                                    >
-                                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                                    </svg>
-                                    <span className="flex-1">Share via Twitter / X</span>
-                                    <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
-                                  </a>
-
-                                  <a
-                                    role="menuitem"
-                                    data-testid="share-option-whatsapp"
-                                    href={shareLinks.whatsappUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={() => {
-                                      setIsShareMenuOpen(false);
-                                      showToast(`Opening WhatsApp share for ${activeSelectedJob.title}`);
-                                    }}
-                                    className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#087F31] dark:hover:text-emerald-400 transition-colors"
-                                  >
-                                    <svg
-                                      viewBox="0 0 24 24"
-                                      fill="currentColor"
-                                      aria-hidden="true"
-                                      className="w-3.5 h-3.5 shrink-0 text-[#087F31] dark:text-emerald-400"
-                                    >
-                                      <path d="M12.03 2a9.97 9.97 0 0 0-8.65 14.94L2 22l5.2-1.36A9.97 9.97 0 1 0 12.03 2Zm5.82 14.12c-.25.7-1.44 1.34-1.99 1.41-.51.07-1.15.1-1.85-.12-.43-.14-.98-.32-1.69-.63-2.97-1.28-4.91-4.29-5.06-4.49-.15-.2-1.21-1.61-1.21-3.07 0-1.46.76-2.18 1.03-2.48.27-.3.59-.37.79-.37.2 0 .39 0 .56.01.18.01.42-.07.66.5.25.6.84 2.06.91 2.21.08.15.13.33.03.53-.1.2-.15.33-.3.5-.15.18-.32.4-.45.54-.15.15-.31.31-.13.61.18.3.78 1.29 1.68 2.09 1.15 1.03 2.13 1.35 2.43 1.5.3.15.48.13.66-.07.18-.2.76-.89.96-1.19.2-.3.4-.25.68-.15.28.1 1.76.83 2.06.98.3.15.5.23.58.35.07.13.07.73-.18 1.43Z" />
-                                    </svg>
-                                    <span className="flex-1">Share via WhatsApp</span>
-                                    <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
-                                  </a>
-
-                                  <a
-                                    role="menuitem"
-                                    data-testid="share-option-email"
-                                    href={shareLinks.emailUrl}
-                                    onClick={() => {
-                                      setIsShareMenuOpen(false);
-                                      showToast(`Opening email draft for ${activeSelectedJob.title}`);
-                                    }}
-                                    className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#2557A7] dark:hover:text-blue-400 transition-colors"
-                                  >
-                                    <Mail className="w-3.5 h-3.5 shrink-0 text-[#2557A7] dark:text-blue-400" />
-                                    <span className="flex-1">Share via Email</span>
-                                  </a>
-
-                                  <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
-
-                                  <a
-                                    role="menuitem"
-                                    data-testid="share-option-linkedin"
-                                    href={shareLinks.linkedinUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={() => setIsShareMenuOpen(false)}
-                                    className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#2557A7] dark:hover:text-blue-400 transition-colors"
-                                  >
-                                    <svg
-                                      viewBox="0 0 24 24"
-                                      fill="currentColor"
-                                      aria-hidden="true"
-                                      className="w-3.5 h-3.5 shrink-0 text-[#0A66C2] dark:text-blue-400"
-                                    >
-                                      <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77Z" />
-                                    </svg>
-                                    <span className="flex-1">Share on LinkedIn</span>
-                                    <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
-                                  </a>
-
+                              return (
+                                <div ref={shareMenuRef} className="relative">
                                   <button
                                     type="button"
-                                    role="menuitem"
-                                    data-testid="share-option-copy-linkedin"
+                                    data-testid="job-detail-share-btn"
+                                    aria-haspopup="menu"
+                                    aria-expanded={isShareMenuOpen}
+                                    aria-label="Share job via Twitter, WhatsApp, Email, or LinkedIn"
                                     onClick={() => {
-                                      setIsShareMenuOpen(false);
-                                      handleCopyLinkedInPost(`job-${activeSelectedJob.id}`, sharePayload);
+                                      if (shareMenuCloseTimerRef.current) {
+                                        clearTimeout(shareMenuCloseTimerRef.current);
+                                        shareMenuCloseTimerRef.current = null;
+                                      }
+                                      setIsShareMenuOpen((prev) => !prev);
                                     }}
-                                    className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#2557A7] dark:hover:text-blue-400 transition-colors cursor-pointer"
+                                    className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                                      copyLinkFeedback.isCopied
+                                        ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 text-[#087F31] dark:text-emerald-300'
+                                        : isShareMenuOpen
+                                        ? 'border-[#2557A7] bg-blue-50 text-[#2557A7] dark:border-blue-400 dark:bg-blue-950/60 dark:text-blue-300'
+                                        : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-[#2557A7] hover:text-[#2557A7] dark:hover:text-blue-400'
+                                    }`}
                                   >
-                                    <Copy className="w-3.5 h-3.5 shrink-0 text-slate-500" />
-                                    <span className="flex-1">Copy LinkedIn Post</span>
+                                    {copyLinkFeedback.isCopied ? (
+                                      <Check className="w-3.5 h-3.5 text-[#087F31] dark:text-emerald-400 animate-share-check-pop" />
+                                    ) : (
+                                      <Share2 className="w-3.5 h-3.5" />
+                                    )}
+                                    <span>{copyLinkFeedback.isCopied ? 'Link Copied' : 'Share'}</span>
+                                    <ChevronDown
+                                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                                        isShareMenuOpen ? 'rotate-180' : ''
+                                      }`}
+                                    />
                                   </button>
 
+                                  {isShareMenuOpen && (
+                                    <div
+                                      role="menu"
+                                      data-testid="job-detail-share-menu"
+                                      aria-label={`Share ${activeSelectedJob.title} at ${activeSelectedJob.company}`}
+                                      className="absolute left-0 top-full mt-2 w-56 sm:w-60 z-30 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 shadow-lg py-1.5"
+                                    >
+                                      <div className="px-3 py-1.5 border-b border-slate-100 dark:border-slate-800">
+                                        <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                          Share Job Listing
+                                        </span>
+                                      </div>
+
+                                      <a
+                                        role="menuitem"
+                                        data-testid="share-option-twitter"
+                                        href={shareLinks.twitterUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={() => {
+                                          setIsShareMenuOpen(false);
+                                          showToast(`Opening Twitter / X share for ${activeSelectedJob.title}`);
+                                        }}
+                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#2557A7] dark:hover:text-blue-400 transition-colors"
+                                      >
+                                        <svg
+                                          viewBox="0 0 24 24"
+                                          fill="currentColor"
+                                          aria-hidden="true"
+                                          className="w-3.5 h-3.5 shrink-0 text-slate-900 dark:text-slate-100"
+                                        >
+                                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                                        </svg>
+                                        <span className="flex-1">Share via Twitter / X</span>
+                                        <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
+                                      </a>
+
+                                      <a
+                                        role="menuitem"
+                                        data-testid="share-option-whatsapp"
+                                        href={shareLinks.whatsappUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={() => {
+                                          setIsShareMenuOpen(false);
+                                          showToast(`Opening WhatsApp share for ${activeSelectedJob.title}`);
+                                        }}
+                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#087F31] dark:hover:text-emerald-400 transition-colors"
+                                      >
+                                        <svg
+                                          viewBox="0 0 24 24"
+                                          fill="currentColor"
+                                          aria-hidden="true"
+                                          className="w-3.5 h-3.5 shrink-0 text-[#087F31] dark:text-emerald-400"
+                                        >
+                                          <path d="M12.03 2a9.97 9.97 0 0 0-8.65 14.94L2 22l5.2-1.36A9.97 9.97 0 1 0 12.03 2Zm5.82 14.12c-.25.7-1.44 1.34-1.99 1.41-.51.07-1.15.1-1.85-.12-.43-.14-.98-.32-1.69-.63-2.97-1.28-4.91-4.29-5.06-4.49-.15-.2-1.21-1.61-1.21-3.07 0-1.46.76-2.18 1.03-2.48.27-.3.59-.37.79-.37.2 0 .39 0 .56.01.18.01.42-.07.66.5.25.6.84 2.06.91 2.21.08.15.13.33.03.53-.1.2-.15.33-.3.5-.15.18-.32.4-.45.54-.15.15-.31.31-.13.61.18.3.78 1.29 1.68 2.09 1.15 1.03 2.13 1.35 2.43 1.5.3.15.48.13.66-.07.18-.2.76-.89.96-1.19.2-.3.4-.25.68-.15.28.1 1.76.83 2.06.98.3.15.5.23.58.35.07.13.07.73-.18 1.43Z" />
+                                        </svg>
+                                        <span className="flex-1">Share via WhatsApp</span>
+                                        <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
+                                      </a>
+
+                                      <a
+                                        role="menuitem"
+                                        data-testid="share-option-email"
+                                        href={shareLinks.emailUrl}
+                                        onClick={() => {
+                                          setIsShareMenuOpen(false);
+                                          showToast(`Opening email draft for ${activeSelectedJob.title}`);
+                                        }}
+                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#2557A7] dark:hover:text-blue-400 transition-colors"
+                                      >
+                                        <Mail className="w-3.5 h-3.5 shrink-0 text-[#2557A7] dark:text-blue-400" />
+                                        <span className="flex-1">Share via Email</span>
+                                      </a>
+
+                                      <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+
+                                      <a
+                                        role="menuitem"
+                                        data-testid="share-option-linkedin"
+                                        href={shareLinks.linkedinUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={() => setIsShareMenuOpen(false)}
+                                        className="flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#2557A7] dark:hover:text-blue-400 transition-colors"
+                                      >
+                                        <svg
+                                          viewBox="0 0 24 24"
+                                          fill="currentColor"
+                                          aria-hidden="true"
+                                          className="w-3.5 h-3.5 shrink-0 text-[#0A66C2] dark:text-blue-400"
+                                        >
+                                          <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.28 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.75M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77Z" />
+                                        </svg>
+                                        <span className="flex-1">Share on LinkedIn</span>
+                                        <ExternalLink className="w-3 h-3 text-slate-400 shrink-0" />
+                                      </a>
+
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        data-testid="share-option-copy-linkedin"
+                                        onClick={() => {
+                                          setIsShareMenuOpen(false);
+                                          handleCopyLinkedInPost(`job-${activeSelectedJob.id}`, sharePayload);
+                                        }}
+                                        className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#2557A7] dark:hover:text-blue-400 transition-colors cursor-pointer"
+                                      >
+                                        <Copy className="w-3.5 h-3.5 shrink-0 text-slate-500" />
+                                        <span className="flex-1">Copy LinkedIn Post</span>
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        role="menuitem"
+                                        data-testid="share-option-copy-link"
+                                        data-copied={copyLinkFeedback.isCopied ? 'true' : 'false'}
+                                        aria-label={copyLinkFeedback.ariaLabel}
+                                        onClick={() => handleCopyJobLink(activeSelectedJob, shareLinks.targetUrl)}
+                                        className={`w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs font-medium transition-colors duration-200 cursor-pointer ${
+                                          copyLinkFeedback.isCopied
+                                            ? 'bg-emerald-50/90 dark:bg-emerald-950/50 text-[#087F31] dark:text-emerald-300'
+                                            : 'text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#2557A7] dark:hover:text-blue-400'
+                                        }`}
+                                      >
+                                        <span
+                                          className={`relative w-5 h-5 rounded-md flex items-center justify-center shrink-0 transition-colors duration-200 ${
+                                            copyLinkFeedback.isCopied
+                                              ? 'bg-emerald-100 dark:bg-emerald-900/60 text-[#087F31] dark:text-emerald-300 animate-share-confirm-pulse'
+                                              : 'bg-transparent text-slate-500 dark:text-slate-400'
+                                          }`}
+                                        >
+                                          <Link2
+                                            className={`w-3.5 h-3.5 transition-all duration-200 ${
+                                              copyLinkFeedback.isCopied
+                                                ? 'opacity-0 scale-50 -rotate-12'
+                                                : 'opacity-100 scale-100 rotate-0'
+                                            }`}
+                                          />
+                                          {copyLinkFeedback.isCopied && (
+                                            <Check
+                                              data-testid="share-copy-link-check-icon"
+                                              className="w-3.5 h-3.5 absolute inset-0 m-auto text-[#087F31] dark:text-emerald-400 animate-share-check-pop"
+                                              strokeWidth={2.5}
+                                            />
+                                          )}
+                                        </span>
+                                        <span className="flex-1 transition-colors duration-200">
+                                          {copyLinkFeedback.label}
+                                        </span>
+                                        {copyLinkFeedback.statusTag && (
+                                          <span
+                                            data-testid="share-copy-link-status"
+                                            className="text-[10px] font-semibold uppercase tracking-wider text-[#087F31] dark:text-emerald-400"
+                                          >
+                                            {copyLinkFeedback.statusTag}
+                                          </span>
+                                        )}
+                                      </button>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+
+                            {(() => {
+                              const activeAlert = findAlertForJob(userAlerts, activeSelectedJob);
+                              if (!activeAlert) return null;
+                              return (
+                                <div
+                                  data-testid="job-detail-alert-status"
+                                  className="w-full mt-1 px-3 py-2 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50/70 dark:bg-emerald-950/30 flex flex-wrap items-center justify-between gap-2 text-xs text-emerald-800 dark:text-emerald-300"
+                                >
+                                  <span>
+                                    <strong>UserAlerts active:</strong> Watching{' '}
+                                    <span className="font-mono">{activeAlert.skills.join(', ')}</span>{' '}
+                                    for browser push notifications.
+                                  </span>
                                   <button
                                     type="button"
-                                    role="menuitem"
-                                    data-testid="share-option-copy-link"
-                                    onClick={() => {
-                                      if (navigator.clipboard) {
-                                        navigator.clipboard.writeText(shareLinks.targetUrl).catch(() => {});
-                                      }
-                                      setIsShareMenuOpen(false);
-                                      showToast(`Copied share link for ${activeSelectedJob.title} at ${activeSelectedJob.company}!`);
-                                    }}
-                                    className="w-full text-left flex items-center gap-2.5 px-3 py-2 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-[#2557A7] dark:hover:text-blue-400 transition-colors cursor-pointer"
+                                    data-testid="open-user-alerts-from-detail"
+                                    onClick={() => setIsAlertsPanelOpen(true)}
+                                    className="font-semibold text-[#2557A7] dark:text-blue-400 hover:underline cursor-pointer"
                                   >
-                                    <Link2 className="w-3.5 h-3.5 shrink-0 text-slate-500" />
-                                    <span className="flex-1">Copy Job Link</span>
+                                    Manage &amp; Test Alerts ({userAlerts.length})
                                   </button>
                                 </div>
-                              )}
-                            </div>
+                              );
+                            })()}
                           </div>
                         );
                       })()}
@@ -1847,24 +2328,66 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Interview Prep Link */}
-                      <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
-                        <span className="text-xs text-slate-600 dark:text-slate-400">
-                          Preparing for {activeSelectedJob.company}? Practice role-specific mock interviews and technical prep notes.
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setActiveTab('ai')}
-                          className="inline-flex items-center gap-1.5 text-xs font-bold text-[#2557A7] dark:text-blue-400 hover:underline cursor-pointer whitespace-nowrap"
-                        >
-                          <TrendingUp className="w-3.5 h-3.5" />
-                          <span>Open Mock Interview &amp; Cheat Sheet</span>
-                        </button>
+                      {/* Quick Interview Tips Section */}
+                      <div
+                        data-testid="job-detail-quick-tips-section"
+                        className="pt-4 border-t border-slate-100 dark:border-slate-800 space-y-3"
+                      >
+                        <div className="rounded-xl border border-amber-200 dark:border-amber-800/70 bg-amber-50/70 dark:bg-amber-950/25 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-800 dark:text-amber-300">
+                              <Lightbulb className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+                              <span>Quick Interview Tips</span>
+                            </div>
+                            <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
+                              Preparing for <span className="font-semibold">{activeSelectedJob.company}</span>? Pop open 3 high-impact interview questions tailored specifically to{' '}
+                              <span className="font-mono font-semibold text-[#2557A7] dark:text-blue-400">
+                                {activeSelectedJob.skills}
+                              </span>.
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              data-testid="job-detail-quick-tips-btn"
+                              aria-haspopup="dialog"
+                              aria-expanded={isQuickTipsModalOpen}
+                              onClick={() => setIsQuickTipsModalOpen(true)}
+                              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg bg-amber-600 hover:bg-amber-700 text-white shadow-xs transition-colors cursor-pointer whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500"
+                            >
+                              <Lightbulb className="w-3.5 h-3.5" />
+                              <span>View 3 Quick Tips</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => setActiveTab('ai')}
+                              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-[#2557A7] dark:text-blue-400 hover:border-[#2557A7] transition-colors cursor-pointer whitespace-nowrap"
+                            >
+                              <TrendingUp className="w-3.5 h-3.5" />
+                              <span>Full Mock Interview</span>
+                            </button>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </aside>
                 )}
               </div>
+            )}
+
+            {activeSelectedJob && (
+              <QuickInterviewTipsModal
+                bundle={generateQuickInterviewTips(activeSelectedJob)}
+                isOpen={isQuickTipsModalOpen}
+                onClose={() => setIsQuickTipsModalOpen(false)}
+                onOpenMockInterview={() => {
+                  setIsQuickTipsModalOpen(false);
+                  setActiveTab('ai');
+                }}
+                onNotify={showToast}
+              />
             )}
 
             {/* Recharts Salary Comparison Bar Chart (Saved Jobs Avg CTC vs Expected Salary Range) */}
@@ -2037,7 +2560,18 @@ export default function App() {
 
         {/* ==================== 3.5 FULL-STACK ENGINEERING CODE LAB ==================== */}
         {activeTab === 'codelab' && (
-          <FullStackCodeLabView />
+          <FullStackCodeLabView
+            jobs={jobs}
+            userAlerts={userAlerts}
+            onJobsUpdated={() => {
+              fetch('/api/jobs')
+                .then((r) => (r.ok ? r.json() : null))
+                .then((data) => {
+                  if (Array.isArray(data)) setJobs(data);
+                })
+                .catch(() => {});
+            }}
+          />
         )}
 
         {/* ==================== 4. LEARNING COURSES VIEW (learning.html) ==================== */}

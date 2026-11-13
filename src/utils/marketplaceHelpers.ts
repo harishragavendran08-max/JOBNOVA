@@ -60,3 +60,88 @@ export function computeJobMatchBreakdown(params: {
     salaryLpa
   };
 }
+
+export type JobSortOption = 'featured' | 'match-desc' | 'ctc-desc' | 'ctc-asc';
+
+export function sortJobsList(
+  jobs: JobItem[],
+  params: {
+    sortBy: JobSortOption;
+    userSkills: string[];
+    expectedMinLpa: number;
+    expectedMaxLpa: number;
+  }
+): JobItem[] {
+  const { sortBy, userSkills, expectedMinLpa, expectedMaxLpa } = params;
+  if (sortBy === 'featured' || jobs.length <= 1) {
+    return [...jobs];
+  }
+
+  const metrics = new Map<number, { matchPercent: number; salaryLpa: number }>();
+  for (const job of jobs) {
+    const breakdown = computeJobMatchBreakdown({
+      job,
+      userSkills,
+      expectedMinLpa,
+      expectedMaxLpa
+    });
+    metrics.set(job.id, {
+      matchPercent: breakdown.matchPercent,
+      salaryLpa: breakdown.salaryLpa ?? 0
+    });
+  }
+
+  return [...jobs].sort((a, b) => {
+    const ma = metrics.get(a.id)!;
+    const mb = metrics.get(b.id)!;
+
+    if (sortBy === 'match-desc') {
+      if (mb.matchPercent !== ma.matchPercent) return mb.matchPercent - ma.matchPercent;
+      if (mb.salaryLpa !== ma.salaryLpa) return mb.salaryLpa - ma.salaryLpa;
+      return a.id - b.id;
+    }
+
+    if (sortBy === 'ctc-desc') {
+      if (mb.salaryLpa !== ma.salaryLpa) return mb.salaryLpa - ma.salaryLpa;
+      if (mb.matchPercent !== ma.matchPercent) return mb.matchPercent - ma.matchPercent;
+      return a.id - b.id;
+    }
+
+    // ctc-asc
+    if (ma.salaryLpa !== mb.salaryLpa) return ma.salaryLpa - mb.salaryLpa;
+    if (mb.matchPercent !== ma.matchPercent) return mb.matchPercent - ma.matchPercent;
+    return a.id - b.id;
+  });
+}
+
+export interface CopyLinkFeedbackMeta {
+  isCopied: boolean;
+  label: 'Link Copied' | 'Copy Link';
+  statusTag: 'Copied' | null;
+  ariaLabel: string;
+}
+
+export function getCopyLinkFeedbackMeta(params: {
+  copiedJobLinkId: number | null;
+  jobId: number;
+  jobTitle?: string;
+}): CopyLinkFeedbackMeta {
+  const isCopied = params.copiedJobLinkId !== null && params.copiedJobLinkId === params.jobId;
+  const roleSuffix = params.jobTitle?.trim() ? ` for ${params.jobTitle.trim()}` : '';
+
+  if (isCopied) {
+    return {
+      isCopied: true,
+      label: 'Link Copied',
+      statusTag: 'Copied',
+      ariaLabel: `Job link${roleSuffix} copied to clipboard`
+    };
+  }
+
+  return {
+    isCopied: false,
+    label: 'Copy Link',
+    statusTag: null,
+    ariaLabel: `Copy job link${roleSuffix} to clipboard`
+  };
+}

@@ -14,12 +14,82 @@
   body {
     font-family: var(--font-sans);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    transition: background-color 180ms ease, color 180ms ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    body,
+    .theme-transition-surface {
+      transition: none !important;
+    }
+
+    .animate-share-check-pop,
+    .animate-share-confirm-pulse {
+      animation: none !important;
+    }
   }
 
   .font-mono,
   .tabular-nums {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes shareCheckPop {
+  0% {
+    opacity: 0;
+    transform: scale(0.5) rotate(-14deg);
+  }
+  65% {
+    opacity: 1;
+    transform: scale(1.14) rotate(2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes shareConfirmPulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(8, 127, 49, 0.3);
+  }
+  100% {
+    box-shadow: 0 0 0 6px rgba(8, 127, 49, 0);
+  }
+}
+
+@layer utilities {
+  .animate-share-check-pop {
+    animation: shareCheckPop 260ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+
+  .animate-share-confirm-pulse {
+    animation: shareConfirmPulse 450ms ease-out forwards;
+  }
+
+  .border-slate-100 {
+    border-color: #cbd5e1;
+  }
+  .border-slate-200 {
+    border-color: #b8c4d4;
+  }
+  .border-slate-300 {
+    border-color: #94a3b8;
+  }
+  .divide-slate-200 > :not(:last-child) {
+    border-color: #b8c4d4;
+  }
+
+  .dark\:border-slate-800:where(.dark, .dark *) {
+    border-color: #334155;
+  }
+  .dark\:border-slate-700:where(.dark, .dark *) {
+    border-color: #475569;
+  }
+  .dark\:divide-slate-800:where(.dark, .dark *) > :not(:last-child) {
+    border-color: #334155;
   }
 }
 

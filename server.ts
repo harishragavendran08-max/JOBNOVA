@@ -16,6 +16,8 @@ import {
   SEED_LINKEDIN_PROFILE_SUMMARY,
   SEED_LINKEDIN_SKILLS,
   SEED_LINKEDIN_WORK_HISTORY,
+  InternshipItem,
+  JobItem,
   SPRING_BOOT_DIAGNOSTICS,
   UserProfile,
   UserSettings,
@@ -38,6 +40,13 @@ import {
   validateLoginInput,
   validateSignUpInput
 } from './src/utils/authLogic.ts';
+import {
+  createUserAlertFromJob,
+  findAlertForJob,
+  findMatchingAlertsForNewJob,
+  recordAlertJobMatches,
+  UserAlertRecord
+} from './src/utils/userAlertsLogic.ts';
 
 dotenv.config();
 
@@ -53,6 +62,8 @@ let coursesStore = [...SEED_COURSES];
 let certificationsStore = [...SEED_CERTIFICATIONS];
 let currentUser: UserProfile | null = { ...DEFAULT_USER_PROFILE };
 let currentSettings: UserSettings = { ...DEFAULT_USER_SETTINGS };
+let nextJobId = SEED_JOBS.reduce((max, j) => Math.max(max, j.id), 0) + 1;
+let userAlertsStore: UserAlertRecord[] = [];
 let nextUserId = 2;
 const registeredAccounts = new Map<string, { profile: UserProfile; password: string }>([
   [
@@ -92,6 +103,83 @@ async function startServer() {
     const skill = typeof req.query.skill === 'string' ? req.query.skill : '';
     const location = typeof req.query.location === 'string' ? req.query.location : 'ALL';
     res.json(filterJobsBySkill(jobsStore, skill, location));
+  });
+
+  app.post('/api/jobs', (req, res) => {
+    const title = typeof req.body?.title === 'string' ? req.body.title.trim() : '';
+    const company = typeof req.body?.company === 'string' ? req.body.company.trim() : '';
+    const location = typeof req.body?.location === 'string' ? req.body.location.trim() : 'Bengaluru';
+    const description =
+      typeof req.body?.description === 'string' && req.body.description.trim()
+        ? req.body.description.trim()
+        : `Newly posted ${title} role at ${company}.`;
+    const skills = typeof req.body?.skills === 'string' ? req.body.skills.trim() : '';
+    const type = typeof req.body?.type === 'string' ? req.body.type.trim() : 'Full-Time';
+    const ctc = typeof req.body?.ctc === 'string' ? req.body.ctc.trim() : '14.5 LPA';
+
+    if (!title || !company || !skills) {
+      res.status(400).json({ error: 'Job title, company, and skills are required.' });
+      return;
+    }
+
+    const createdJob: JobItem = {
+      id: nextJobId++,
+      title,
+      company,
+      location: location || 'Bengaluru',
+      description,
+      skills,
+      type,
+      ctc
+    };
+
+    jobsStore = [createdJob, ...jobsStore];
+    const triggeredAlerts = findMatchingAlertsForNewJob(userAlertsStore, createdJob);
+    if (triggeredAlerts.length > 0) {
+      userAlertsStore = recordAlertJobMatches(userAlertsStore, triggeredAlerts, createdJob.id);
+    }
+
+    res.status(201).json({
+      job: createdJob,
+      triggeredAlerts,
+      alerts: userAlertsStore
+    });
+  });
+
+  // 1.5 UserAlerts Store (/api/user-alerts)
+  app.get('/api/user-alerts', (_req, res) => {
+    res.json({ alerts: userAlertsStore });
+  });
+
+  app.post('/api/user-alerts', (req, res) => {
+    const job = req.body?.job as JobItem | undefined;
+    if (!job || typeof job.id !== 'number' || typeof job.skills !== 'string') {
+      res.status(400).json({ error: 'Valid job object with id and skills is required.' });
+      return;
+    }
+
+    const existing = findAlertForJob(userAlertsStore, job);
+    if (existing) {
+      res.status(200).json({ alert: existing, alreadyExists: true, alerts: userAlertsStore });
+      return;
+    }
+
+    const newAlert = createUserAlertFromJob({
+      job,
+      userEmail: currentUser?.email || req.body?.userEmail || 'guest@jobnova.in',
+      pushEnabled: req.body?.pushEnabled !== false,
+      browserPermission:
+        typeof req.body?.browserPermission === 'string' ? req.body.browserPermission : 'default'
+    });
+    userAlertsStore = [newAlert, ...userAlertsStore];
+
+    res.status(201).json({ alert: newAlert, alreadyExists: false, alerts: userAlertsStore });
+  });
+
+  app.delete('/api/user-alerts/:id', (req, res) => {
+    const { id } = req.params;
+    userAlertsStore = userAlertsStore.filter((a) => a.id !== id);
+    res.json({ deletedId: id, alerts: userAlertsStore });
   });
 
   // 2. InternshipController (/api/internships)

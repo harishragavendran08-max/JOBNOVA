@@ -1,13 +1,19 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  compileWebSandboxDocument,
+  createMySqlSandboxState,
   executeMockMySqlQuery,
+  executeStatefulMySqlQuery,
   evaluateFullStackChallenge,
+  generateSpringBootFullStackBundle,
   MOCK_MYSQL_TABLES,
   MYSQL_SCHEMAS,
   PRESET_SQL_QUERIES,
   FULL_STACK_CHALLENGES,
-  SPRING_BOOT_ANNOTATION_GUIDE
+  SPRING_BOOT_ANNOTATION_GUIDE,
+  SPRING_BOOT_ENTITY_TEMPLATES,
+  WEB_SANDBOX_PRESETS
 } from './fullStackCodeLabLogic';
 
 test('executeMockMySqlQuery handles SHOW TABLES and DESCRIBE schema inspection', () => {
@@ -56,6 +62,85 @@ test('executeMockMySqlQuery filters skills table with LIKE operator', () => {
   assert.equal(result.error, undefined);
   assert.equal(result.rowCount, 3); // TCS, Infosys, Cognizant
   assert.ok(result.rows.every((row) => String(row[2]).includes('springboot')));
+});
+
+test('executeStatefulMySqlQuery supports INSERT, UPDATE, DELETE, CREATE TABLE, and GROUP BY aggregates', () => {
+  let db = createMySqlSandboxState();
+  const initialCount = db.tables.jobs.length;
+
+  // INSERT
+  const ins = executeStatefulMySqlQuery(
+    "INSERT INTO jobs (title, company, location, ctc_lpa, skills, type) VALUES ('Spring Cloud Engineer', 'Paytm', 'Bengaluru', 16.5, 'java,springboot,mysql', 'Full-Time');",
+    db
+  );
+  assert.equal(ins.result.error, undefined);
+  assert.equal(ins.result.queryType, 'INSERT');
+  db = ins.nextState;
+  assert.equal(db.tables.jobs.length, initialCount + 1);
+
+  // UPDATE
+  const upd = executeStatefulMySqlQuery(
+    "UPDATE jobs SET ctc_lpa = 18.0 WHERE company = 'Paytm';",
+    db
+  );
+  assert.equal(upd.result.error, undefined);
+  assert.equal(upd.result.queryType, 'UPDATE');
+  db = upd.nextState;
+  assert.equal(db.tables.jobs[0].ctc_lpa, 18.0);
+
+  // GROUP BY + COUNT + AVG
+  const grp = executeStatefulMySqlQuery(
+    'SELECT location, COUNT(*) AS open_roles, AVG(ctc_lpa) AS avg_ctc_lpa FROM jobs GROUP BY location ORDER BY avg_ctc_lpa DESC;',
+    db
+  );
+  assert.equal(grp.result.error, undefined);
+  assert.deepEqual(grp.result.columns, ['location', 'open_roles', 'avg_ctc_lpa']);
+  assert.ok(grp.result.rowCount >= 3);
+
+  // CREATE TABLE
+  const crt = executeStatefulMySqlQuery(
+    'CREATE TABLE interviews (id INT PRIMARY KEY, company VARCHAR(80), round_num INT);',
+    db
+  );
+  assert.equal(crt.result.error, undefined);
+  assert.equal(crt.result.queryType, 'CREATE');
+  db = crt.nextState;
+  assert.ok(db.schemas.some((s) => s.name === 'interviews'));
+
+  // DELETE
+  const del = executeStatefulMySqlQuery("DELETE FROM jobs WHERE company = 'Paytm';", db);
+  assert.equal(del.result.error, undefined);
+  assert.equal(del.result.queryType, 'DELETE');
+  db = del.nextState;
+  assert.equal(db.tables.jobs.length, initialCount);
+});
+
+test('generateSpringBootFullStackBundle produces synchronized Java, Spring Boot, MySQL DDL, and JS client code', () => {
+  const jobSpec = SPRING_BOOT_ENTITY_TEMPLATES[0];
+  const bundle = generateSpringBootFullStackBundle(jobSpec);
+
+  assert.ok(bundle.entityJava.includes('@Entity'));
+  assert.ok(bundle.entityJava.includes('@Table(name = "jobs")'));
+  assert.ok(bundle.repositoryJava.includes('extends JpaRepository<Job, Long>'));
+  assert.ok(bundle.controllerJava.includes('@RestController'));
+  assert.ok(bundle.controllerJava.includes('@RequestMapping("/api/jobs")'));
+  assert.ok(bundle.mysqlDdl.includes('CREATE TABLE IF NOT EXISTS `jobs`'));
+  assert.ok(bundle.frontendJs.includes("fetch('/api/jobs')"));
+});
+
+test('compileWebSandboxDocument bundles HTML5, CSS3, and JavaScript with console bridge safely', () => {
+  const preset = WEB_SANDBOX_PRESETS[0];
+  const doc = compileWebSandboxDocument({
+    html: preset.html,
+    css: preset.css,
+    js: preset.js + '\nconst tag = "</script>";'
+  });
+
+  assert.ok(doc.includes('<!DOCTYPE html>'));
+  assert.ok(doc.includes(`<style>${preset.css}</style>`));
+  assert.ok(doc.includes(preset.html));
+  assert.ok(doc.includes('JOBNOVA_SANDBOX_CONSOLE'));
+  assert.ok(doc.includes('<\\/script>'));
 });
 
 test('evaluateFullStackChallenge grades code against solution keywords accurately', () => {

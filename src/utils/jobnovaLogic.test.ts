@@ -49,6 +49,7 @@ import {
   generateMockInterviewQuestions,
   getDefaultInterviewIso,
   getStageStepIndex,
+  getThemeToggleMeta,
   importLinkedInProfileData,
   matchOfflineCareerAssistant,
   parseJobCtcLpa,
@@ -494,6 +495,24 @@ test('toggleThemeSetting switches userSettings.theme between light and dark whil
 
   const lightSettings = toggleThemeSetting(darkSettings);
   assert.equal(lightSettings.theme, 'light');
+});
+
+test('getThemeToggleMeta returns accurate accessible labels and visual feedback strings for light and dark modes', () => {
+  const lightMeta = getThemeToggleMeta('light');
+  assert.equal(lightMeta.isDark, false);
+  assert.equal(lightMeta.currentLabel, 'Light');
+  assert.equal(lightMeta.nextModeLabel, 'Dark Mode');
+  assert.match(lightMeta.ariaLabel, /Light Mode active/i);
+  assert.match(lightMeta.ariaLabel, /Switch to Dark Mode/i);
+  assert.equal(lightMeta.feedbackBadgeText, 'Light Mode Active');
+
+  const darkMeta = getThemeToggleMeta('dark');
+  assert.equal(darkMeta.isDark, true);
+  assert.equal(darkMeta.currentLabel, 'Dark');
+  assert.equal(darkMeta.nextModeLabel, 'Light Mode');
+  assert.match(darkMeta.ariaLabel, /Dark Mode active/i);
+  assert.match(darkMeta.ariaLabel, /Switch to Light Mode/i);
+  assert.equal(darkMeta.feedbackBadgeText, 'Dark Mode Active');
 });
 
 test('computeProfileSkillProficiencyList and updateSkillProficiencyMap dynamically influence computeProfileSkillGapAnalysis', () => {

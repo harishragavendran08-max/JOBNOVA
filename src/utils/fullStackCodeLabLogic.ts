@@ -3,13 +3,22 @@
  * and Full-Stack Placement Assessment Evaluator.
  */
 
+import type { JobItem } from '../data/seedData';
+import type { UserAlertRecord } from './userAlertsLogic';
+
 export interface SqlQueryResult {
   columns: string[];
   rows: (string | number | boolean | null)[][];
   rowCount: number;
   executionTimeMs: number;
   error?: string;
-  queryType: 'SELECT' | 'INSERT' | 'UPDATE' | 'SHOW' | 'DESCRIBE' | 'OTHER';
+  message?: string;
+  queryType: 'SELECT' | 'INSERT' | 'UPDATE' | 'DELETE' | 'CREATE' | 'SHOW' | 'DESCRIBE' | 'OTHER';
+}
+
+export interface MySqlDatabaseState {
+  tables: Record<string, Record<string, any>[]>;
+  schemas: SqlTableSchema[];
 }
 
 export interface SqlTableSchema {
@@ -131,6 +140,14 @@ export const MYSQL_SCHEMAS: SqlTableSchema[] = [
 
 export const PRESET_SQL_QUERIES = [
   {
+    name: 'Avg & Count CTC by Location (GROUP BY)',
+    sql: 'SELECT location, COUNT(*) AS open_roles, AVG(ctc_lpa) AS avg_ctc_lpa FROM jobs GROUP BY location ORDER BY avg_ctc_lpa DESC;'
+  },
+  {
+    name: 'Insert New Java + Spring Boot Role (INSERT)',
+    sql: "INSERT INTO jobs (title, company, location, ctc_lpa, skills, type) VALUES ('Spring Cloud Engineer', 'Paytm', 'Bengaluru', 16.5, 'java,springboot,mysql,kafka', 'Full-Time');"
+  },
+  {
     name: 'High-Paying Roles (> 8 LPA)',
     sql: 'SELECT id, title, company, location, ctc_lpa FROM jobs WHERE ctc_lpa >= 8.0 ORDER BY ctc_lpa DESC;'
   },
@@ -143,10 +160,6 @@ export const PRESET_SQL_QUERIES = [
     sql: "SELECT title, company, ctc_lpa, skills FROM jobs WHERE skills LIKE '%springboot%' ORDER BY ctc_lpa DESC;"
   },
   {
-    name: 'Chennai & Bengaluru Engineering Jobs',
-    sql: "SELECT title, company, location, ctc_lpa FROM jobs WHERE location = 'Chennai' OR location = 'Bengaluru' ORDER BY ctc_lpa DESC;"
-  },
-  {
     name: 'Student Candidates & Primary Stack',
     sql: 'SELECT name, cgpa, primary_stack FROM students WHERE cgpa >= 8.5 ORDER BY cgpa DESC;'
   },
@@ -156,92 +169,540 @@ export const PRESET_SQL_QUERIES = [
   }
 ];
 
+export function createMySqlSandboxState(
+  liveJobs?: JobItem[],
+  liveAlerts?: UserAlertRecord[]
+): MySqlDatabaseState {
+  const jobsRows =
+    liveJobs && liveJobs.length > 0
+      ? liveJobs.map((j) => {
+          const parsedCtc = parseFloat(String(j.ctc || '8.0').replace(/[^0-9.]/g, ''));
+          return {
+            id: j.id,
+            title: j.title,
+            company: j.company,
+            location: j.location,
+            ctc_lpa: Number.isFinite(parsedCtc) ? parsedCtc : 8.0,
+            skills: j.skills,
+            type: j.type || 'Full-Time'
+          };
+        })
+      : MOCK_MYSQL_TABLES.jobs.map((r) => ({ ...r }));
+
+  const alertRows = (liveAlerts || []).map((a, idx) => ({
+    id: idx + 1,
+    alert_key: a.id,
+    user_email: a.userEmail,
+    source_job_id: a.sourceJobId,
+    watched_skills: a.skills.join(','),
+    push_enabled: a.pushEnabled ? 1 : 0,
+    matched_count: a.matchedNewJobIds.length
+  }));
+
+  const tables: Record<string, Record<string, any>[]> = {
+    jobs: jobsRows,
+    students: MOCK_MYSQL_TABLES.students.map((r) => ({ ...r })),
+    applications: MOCK_MYSQL_TABLES.applications.map((r) => ({ ...r })),
+    skills: MOCK_MYSQL_TABLES.skills.map((r) => ({ ...r })),
+    user_alerts: alertRows
+  };
+
+  const schemas: SqlTableSchema[] = [
+    ...MYSQL_SCHEMAS.map((s) => ({
+      ...s,
+      columns: s.columns.map((c) => ({ ...c })),
+      rowCount: (tables[s.name] || []).length
+    })),
+    {
+      name: 'user_alerts',
+      description: 'Active skill-based push notification subscriptions',
+      rowCount: alertRows.length,
+      columns: [
+        { name: 'id', type: 'INT', key: 'PRI' },
+        { name: 'alert_key', type: 'VARCHAR(64)' },
+        { name: 'user_email', type: 'VARCHAR(120)' },
+        { name: 'source_job_id', type: 'INT', key: 'FK' },
+        { name: 'watched_skills', type: 'VARCHAR(255)' },
+        { name: 'push_enabled', type: 'TINYINT(1)' },
+        { name: 'matched_count', type: 'INT' }
+      ]
+    }
+  ];
+
+  return { tables, schemas };
+}
+
 /**
  * Lightweight, robust in-browser SQL executor for MySQL placement queries.
  * Handles SELECT, SHOW TABLES, DESCRIBE, JOINs, WHERE, ORDER BY, and LIMIT.
  */
-export function executeMockMySqlQuery(rawSql: string): SqlQueryResult {
+export function executeMockMySqlQuery(
+  rawSql: string,
+  state?: MySqlDatabaseState
+): SqlQueryResult {
+  return executeStatefulMySqlQuery(rawSql, state || {
+    tables: Object.fromEntries(
+      Object.entries(MOCK_MYSQL_TABLES).map(([k, rows]) => [k, rows.map((r) => ({ ...r }))])
+    ),
+    schemas: MYSQL_SCHEMAS.map((s) => ({ ...s, columns: s.columns.map((c) => ({ ...c })) }))
+  }).result;
+}
+
+export function executeStatefulMySqlQuery(
+  rawSql: string,
+  state: MySqlDatabaseState
+): { result: SqlQueryResult; nextState: MySqlDatabaseState } {
   const start = performance.now();
   const trimmed = rawSql.trim().replace(/;+$/, '').trim();
+  const cloneState = (): MySqlDatabaseState => ({
+    tables: Object.fromEntries(
+      Object.entries(state.tables).map(([k, rows]) => [k, rows.map((r) => ({ ...r }))])
+    ),
+    schemas: state.schemas.map((s) => ({
+      ...s,
+      columns: s.columns.map((c) => ({ ...c })),
+      rowCount: (state.tables[s.name] || []).length
+    }))
+  });
 
   if (!trimmed) {
     return {
-      columns: ['status'],
-      rows: [['Empty SQL statement. Please enter a valid query.']],
-      rowCount: 0,
-      executionTimeMs: 0,
-      error: 'Query cannot be empty.',
-      queryType: 'OTHER'
+      nextState: state,
+      result: {
+        columns: ['status'],
+        rows: [['Empty SQL statement. Please enter a valid query.']],
+        rowCount: 0,
+        executionTimeMs: 0,
+        error: 'Query cannot be empty.',
+        queryType: 'OTHER'
+      }
     };
   }
 
   const upper = trimmed.toUpperCase();
 
-  // Handle SHOW TABLES
+  // SHOW TABLES
   if (upper === 'SHOW TABLES' || upper.startsWith('SHOW TABLES')) {
-    const tableNames = Object.keys(MOCK_MYSQL_TABLES);
+    const tableNames = Object.keys(state.tables);
     return {
-      columns: ['Tables_in_jobnova_db'],
-      rows: tableNames.map((t) => [t]),
-      rowCount: tableNames.length,
-      executionTimeMs: Math.round(performance.now() - start),
-      queryType: 'SHOW'
+      nextState: state,
+      result: {
+        columns: ['Tables_in_jobnova_db'],
+        rows: tableNames.map((t) => [t]),
+        rowCount: tableNames.length,
+        executionTimeMs: Math.max(1, Math.round(performance.now() - start)),
+        queryType: 'SHOW'
+      }
     };
   }
 
-  // Handle DESCRIBE <table>
+  // SHOW CREATE TABLE <table>
+  if (upper.startsWith('SHOW CREATE TABLE ')) {
+    const tableName = trimmed.replace(/^SHOW\s+CREATE\s+TABLE\s+/i, '').trim().toLowerCase().replace(/[`"';]/g, '');
+    const schema = state.schemas.find((s) => s.name === tableName);
+    if (!schema) {
+      return {
+        nextState: state,
+        result: {
+          columns: ['Error'],
+          rows: [[`Table '${tableName}' does not exist in jobnova_db.`]],
+          rowCount: 0,
+          executionTimeMs: 1,
+          error: `Table '${tableName}' not found.`,
+          queryType: 'SHOW'
+        }
+      };
+    }
+    const ddlLines = schema.columns.map((c) => {
+      const autoInc = c.name === 'id' ? ' AUTO_INCREMENT' : '';
+      return `  \`${c.name}\` ${c.type}${c.key === 'PRI' ? ` NOT NULL${autoInc}` : ''}`;
+    });
+    const pkCol = schema.columns.find((c) => c.key === 'PRI');
+    if (pkCol) ddlLines.push(`  PRIMARY KEY (\`${pkCol.name}\`)`);
+    const ddl = `CREATE TABLE \`${schema.name}\` (\n${ddlLines.join(',\n')}\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;`;
+    return {
+      nextState: state,
+      result: {
+        columns: ['Table', 'Create Table'],
+        rows: [[schema.name, ddl]],
+        rowCount: 1,
+        executionTimeMs: 1,
+        queryType: 'SHOW'
+      }
+    };
+  }
+
+  // DESCRIBE <table>
   if (upper.startsWith('DESCRIBE ') || upper.startsWith('DESC ')) {
     const parts = trimmed.split(/\s+/);
     const tableName = (parts[1] || '').toLowerCase().replace(/[`"';]/g, '');
-    const schema = MYSQL_SCHEMAS.find((s) => s.name === tableName);
+    const schema = state.schemas.find((s) => s.name === tableName);
     if (!schema) {
       return {
-        columns: ['Error'],
-        rows: [[`Table '${tableName}' does not exist in jobnova_db.`]],
-        rowCount: 0,
-        executionTimeMs: Math.round(performance.now() - start),
-        error: `Table '${tableName}' not found.`,
-        queryType: 'DESCRIBE'
+        nextState: state,
+        result: {
+          columns: ['Error'],
+          rows: [[`Table '${tableName}' does not exist in jobnova_db.`]],
+          rowCount: 0,
+          executionTimeMs: Math.round(performance.now() - start),
+          error: `Table '${tableName}' not found.`,
+          queryType: 'DESCRIBE'
+        }
       };
     }
     return {
-      columns: ['Field', 'Type', 'Key'],
-      rows: schema.columns.map((c) => [c.name, c.type, c.key || '']),
-      rowCount: schema.columns.length,
-      executionTimeMs: Math.round(performance.now() - start),
-      queryType: 'DESCRIBE'
+      nextState: state,
+      result: {
+        columns: ['Field', 'Type', 'Key'],
+        rows: schema.columns.map((c) => [c.name, c.type, c.key || '']),
+        rowCount: schema.columns.length,
+        executionTimeMs: Math.round(performance.now() - start),
+        queryType: 'DESCRIBE'
+      }
     };
   }
 
-  // Handle SELECT Queries
+  // CREATE TABLE
+  if (upper.startsWith('CREATE TABLE')) {
+    const createMatch = trimmed.match(
+      /^CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-zA-Z0-9_`"]+)\s*\(([\s\S]+)\)$/i
+    );
+    if (!createMatch) {
+      return {
+        nextState: state,
+        result: {
+          columns: ['Error'],
+          rows: [['Malformed CREATE TABLE syntax.']],
+          rowCount: 0,
+          executionTimeMs: 1,
+          error: 'Format: CREATE TABLE table_name (id INT PRIMARY KEY, name VARCHAR(100));',
+          queryType: 'CREATE'
+        }
+      };
+    }
+    const tableName = createMatch[1].toLowerCase().replace(/[`"]/g, '');
+    const colDefs = createMatch[2]
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s && !/^PRIMARY\s+KEY|^FOREIGN\s+KEY|^KEY\s+|^INDEX\s+/i.test(s));
+
+    const columns = colDefs.map((def) => {
+      const tokens = def.split(/\s+/);
+      const colName = tokens[0].replace(/[`"]/g, '');
+      const colType = tokens[1] ? tokens[1].toUpperCase() : 'VARCHAR(255)';
+      const isPri = /PRIMARY\s+KEY/i.test(def);
+      return { name: colName, type: colType, ...(isPri ? { key: 'PRI' } : {}) };
+    });
+
+    const next = cloneState();
+    if (!next.tables[tableName]) {
+      next.tables[tableName] = [];
+    }
+    const existingIdx = next.schemas.findIndex((s) => s.name === tableName);
+    const newSchema: SqlTableSchema = {
+      name: tableName,
+      description: 'User-defined MySQL table in sandbox',
+      columns,
+      rowCount: next.tables[tableName].length
+    };
+    if (existingIdx >= 0) {
+      next.schemas[existingIdx] = newSchema;
+    } else {
+      next.schemas.push(newSchema);
+    }
+
+    return {
+      nextState: next,
+      result: {
+        columns: ['Status', 'Table', 'Columns'],
+        rows: [['OK (0 rows affected)', tableName, columns.map((c) => c.name).join(', ')]],
+        rowCount: 1,
+        executionTimeMs: 1,
+        message: `Table '${tableName}' created cleanly in jobnova_db.`,
+        queryType: 'CREATE'
+      }
+    };
+  }
+
+  // INSERT INTO
+  if (upper.startsWith('INSERT')) {
+    const insertMatch = trimmed.match(
+      /^INSERT\s+INTO\s+([a-zA-Z0-9_`"]+)\s*(?:\(([^)]+)\))?\s*VALUES\s*\(([\s\S]+)\)$/i
+    );
+    if (!insertMatch) {
+      return {
+        nextState: state,
+        result: {
+          columns: ['Error'],
+          rows: [['Malformed INSERT statement.']],
+          rowCount: 0,
+          executionTimeMs: 1,
+          error: 'Format: INSERT INTO jobs (title, company, location, ctc_lpa, skills) VALUES (...);',
+          queryType: 'INSERT'
+        }
+      };
+    }
+
+    const tableName = insertMatch[1].toLowerCase().replace(/[`"]/g, '');
+    if (!state.tables[tableName]) {
+      return {
+        nextState: state,
+        result: {
+          columns: ['Error'],
+          rows: [[`Table '${tableName}' does not exist.`]],
+          rowCount: 0,
+          executionTimeMs: 1,
+          error: `Table '${tableName}' not found.`,
+          queryType: 'INSERT'
+        }
+      };
+    }
+
+    const schema = state.schemas.find((s) => s.name === tableName);
+    const colList = insertMatch[2]
+      ? insertMatch[2].split(',').map((c) => c.trim().replace(/[`"]/g, ''))
+      : (schema ? schema.columns.map((c) => c.name) : []);
+    const values = splitSqlValues(insertMatch[3]);
+
+    if (colList.length !== values.length) {
+      return {
+        nextState: state,
+        result: {
+          columns: ['Error'],
+          rows: [[`Column count (${colList.length}) does not match value count (${values.length}).`]],
+          rowCount: 0,
+          executionTimeMs: 1,
+          error: `Column count (${colList.length}) doesn't match value count (${values.length}).`,
+          queryType: 'INSERT'
+        }
+      };
+    }
+
+    const next = cloneState();
+    const existingRows = next.tables[tableName];
+    const maxId = existingRows.reduce((m, r) => Math.max(m, Number(r.id) || 0), 0);
+    const newRow: Record<string, any> = {};
+    if (schema?.columns.some((c) => c.name === 'id') && !colList.includes('id')) {
+      newRow.id = maxId + 1;
+    }
+    colList.forEach((col, i) => {
+      newRow[col] = values[i];
+    });
+    next.tables[tableName] = [newRow, ...existingRows];
+    next.schemas = next.schemas.map((s) =>
+      s.name === tableName ? { ...s, rowCount: next.tables[tableName].length } : s
+    );
+
+    const previewCols = Object.keys(newRow);
+    return {
+      nextState: next,
+      result: {
+        columns: previewCols,
+        rows: [previewCols.map((c) => newRow[c])],
+        rowCount: 1,
+        executionTimeMs: Math.max(1, Math.round(performance.now() - start)),
+        message: `INSERT OK: 1 row added to '${tableName}'.`,
+        queryType: 'INSERT'
+      }
+    };
+  }
+
+  // UPDATE <table> SET ... [WHERE ...]
+  if (upper.startsWith('UPDATE ')) {
+    const updateMatch = trimmed.match(/^UPDATE\s+([a-zA-Z0-9_`"]+)\s+SET\s+([\s\S]+?)(?:\s+WHERE\s+([\s\S]+))?$/i);
+    if (!updateMatch) {
+      return {
+        nextState: state,
+        result: {
+          columns: ['Error'],
+          rows: [['Malformed UPDATE syntax.']],
+          rowCount: 0,
+          executionTimeMs: 1,
+          error: "Format: UPDATE jobs SET ctc_lpa = 12.0 WHERE company = 'TCS';",
+          queryType: 'UPDATE'
+        }
+      };
+    }
+    const tableName = updateMatch[1].toLowerCase().replace(/[`"]/g, '');
+    if (!state.tables[tableName]) {
+      return {
+        nextState: state,
+        result: {
+          columns: ['Error'],
+          rows: [[`Table '${tableName}' not found.`]],
+          rowCount: 0,
+          executionTimeMs: 1,
+          error: `Table '${tableName}' does not exist.`,
+          queryType: 'UPDATE'
+        }
+      };
+    }
+
+    const assignments = updateMatch[2].split(',').map((part) => {
+      const [lhs, ...rhsParts] = part.split('=');
+      return {
+        col: lhs.trim().replace(/[`"]/g, ''),
+        val: parseSqlLiteral(rhsParts.join('=').trim())
+      };
+    });
+    const whereExpr = updateMatch[3]?.trim();
+
+    const next = cloneState();
+    let updatedCount = 0;
+    next.tables[tableName] = next.tables[tableName].map((row) => {
+      if (!whereExpr || evaluateWhereClause(row, whereExpr)) {
+        updatedCount++;
+        const copy = { ...row };
+        for (const a of assignments) copy[a.col] = a.val;
+        return copy;
+      }
+      return row;
+    });
+
+    return {
+      nextState: next,
+      result: {
+        columns: ['Status', 'Rows Updated'],
+        rows: [[`Updated '${tableName}'`, updatedCount]],
+        rowCount: updatedCount,
+        executionTimeMs: 1,
+        message: `UPDATE OK: ${updatedCount} row(s) updated in '${tableName}'.`,
+        queryType: 'UPDATE'
+      }
+    };
+  }
+
+  // DELETE FROM <table> [WHERE ...]
+  if (upper.startsWith('DELETE')) {
+    const deleteMatch = trimmed.match(/^DELETE\s+FROM\s+([a-zA-Z0-9_`"]+)(?:\s+WHERE\s+([\s\S]+))?$/i);
+    if (!deleteMatch) {
+      return {
+        nextState: state,
+        result: {
+          columns: ['Error'],
+          rows: [['Malformed DELETE syntax.']],
+          rowCount: 0,
+          executionTimeMs: 1,
+          error: 'Format: DELETE FROM jobs WHERE id = 1;',
+          queryType: 'DELETE'
+        }
+      };
+    }
+    const tableName = deleteMatch[1].toLowerCase().replace(/[`"]/g, '');
+    if (!state.tables[tableName]) {
+      return {
+        nextState: state,
+        result: {
+          columns: ['Error'],
+          rows: [[`Table '${tableName}' not found.`]],
+          rowCount: 0,
+          executionTimeMs: 1,
+          error: `Table '${tableName}' does not exist.`,
+          queryType: 'DELETE'
+        }
+      };
+    }
+
+    const whereExpr = deleteMatch[2]?.trim();
+    const next = cloneState();
+    const before = next.tables[tableName].length;
+    next.tables[tableName] = whereExpr
+      ? next.tables[tableName].filter((row) => !evaluateWhereClause(row, whereExpr))
+      : [];
+    const deletedCount = before - next.tables[tableName].length;
+    next.schemas = next.schemas.map((s) =>
+      s.name === tableName ? { ...s, rowCount: next.tables[tableName].length } : s
+    );
+
+    return {
+      nextState: next,
+      result: {
+        columns: ['Status', 'Rows Deleted'],
+        rows: [[`Deleted from '${tableName}'`, deletedCount]],
+        rowCount: deletedCount,
+        executionTimeMs: 1,
+        message: `DELETE OK: ${deletedCount} row(s) removed from '${tableName}'.`,
+        queryType: 'DELETE'
+      }
+    };
+  }
+
+  // SELECT
   if (upper.startsWith('SELECT')) {
     try {
-      return parseAndExecuteSelectQuery(trimmed, start);
+      return {
+        nextState: state,
+        result: parseAndExecuteSelectQuery(trimmed, start, state)
+      };
     } catch (err: any) {
       return {
-        columns: ['Error'],
-        rows: [[err.message || 'Syntax error in SQL query.']],
-        rowCount: 0,
-        executionTimeMs: Math.round(performance.now() - start),
-        error: err.message || 'Syntax error',
-        queryType: 'SELECT'
+        nextState: state,
+        result: {
+          columns: ['Error'],
+          rows: [[err.message || 'Syntax error in SQL query.']],
+          rowCount: 0,
+          executionTimeMs: Math.round(performance.now() - start),
+          error: err.message || 'Syntax error',
+          queryType: 'SELECT'
+        }
       };
     }
   }
 
   return {
-    columns: ['Status'],
-    rows: [[`Command recognized: query executed in safe sandbox mode.`]],
-    rowCount: 1,
-    executionTimeMs: Math.round(performance.now() - start),
-    queryType: 'OTHER'
+    nextState: state,
+    result: {
+      columns: ['Status'],
+      rows: [['Command recognized: executed in MySQL 8.0 sandbox mode.']],
+      rowCount: 1,
+      executionTimeMs: Math.round(performance.now() - start),
+      queryType: 'OTHER'
+    }
   };
 }
 
-function parseAndExecuteSelectQuery(sql: string, startTime: number): SqlQueryResult {
-  // Regex to extract main SELECT clauses
-  // SELECT <cols> FROM <table1> [JOIN <table2> ON <cond>] [WHERE <cond>] [ORDER BY <col> [ASC|DESC]] [LIMIT <n>]
-  const selectMatch = sql.match(/SELECT\s+(.*?)\s+FROM\s+([a-zA-Z0-9_`"]+)(.*)/is);
+function parseSqlLiteral(raw: string): string | number | boolean | null {
+  const t = raw.trim();
+  if (/^null$/i.test(t)) return null;
+  if (/^true$/i.test(t)) return true;
+  if (/^false$/i.test(t)) return false;
+  if ((t.startsWith("'") && t.endsWith("'")) || (t.startsWith('"') && t.endsWith('"'))) {
+    return t.slice(1, -1);
+  }
+  const n = Number(t);
+  return t !== '' && !Number.isNaN(n) ? n : t;
+}
+
+function splitSqlValues(raw: string): (string | number | boolean | null)[] {
+  const result: string[] = [];
+  let current = '';
+  let quoteChar: string | null = null;
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    if ((ch === "'" || ch === '"') && raw[i - 1] !== '\\') {
+      if (quoteChar === ch) {
+        quoteChar = null;
+      } else if (!quoteChar) {
+        quoteChar = ch;
+      }
+      current += ch;
+    } else if (ch === ',' && !quoteChar) {
+      result.push(current.trim());
+      current = '';
+    } else {
+      current += ch;
+    }
+  }
+  if (current.trim() !== '') result.push(current.trim());
+  return result.map(parseSqlLiteral);
+}
+
+function parseAndExecuteSelectQuery(
+  sql: string,
+  startTime: number,
+  state: MySqlDatabaseState
+): SqlQueryResult {
+  const selectMatch = sql.match(/SELECT\s+([\s\S]*?)\s+FROM\s+([a-zA-Z0-9_`"]+)(.*)/is);
   if (!selectMatch) {
     throw new Error('Malformed SELECT query. Format: SELECT <columns> FROM <table> [WHERE ...] [ORDER BY ...]');
   }
@@ -250,7 +711,7 @@ function parseAndExecuteSelectQuery(sql: string, startTime: number): SqlQueryRes
   const primaryTable = selectMatch[2].trim().toLowerCase().replace(/[`"]/g, '');
   const remainder = selectMatch[3].trim();
 
-  const baseData = MOCK_MYSQL_TABLES[primaryTable];
+  const baseData = state.tables[primaryTable];
   if (!baseData) {
     throw new Error(`Table '${primaryTable}' does not exist in jobnova_db.`);
   }
@@ -258,12 +719,12 @@ function parseAndExecuteSelectQuery(sql: string, startTime: number): SqlQueryRes
   let workingRows: Record<string, any>[] = baseData.map((row) => ({ ...row }));
 
   // Check for JOIN
-  const joinMatch = remainder.match(/JOIN\s+([a-zA-Z0-9_`"]+)\s+ON\s+([a-zA-Z0-9_.]+)\s*=\s*([a-zA-Z0-9_.]+)(.*)/i);
+  const joinMatch = remainder.match(/(?:LEFT\s+|INNER\s+)?JOIN\s+([a-zA-Z0-9_`"]+)\s+ON\s+([a-zA-Z0-9_.]+)\s*=\s*([a-zA-Z0-9_.]+)(.*)/i);
   if (joinMatch) {
     const joinedTableName = joinMatch[1].toLowerCase().replace(/[`"]/g, '');
     const leftKey = joinMatch[2].trim();
     const rightKey = joinMatch[3].trim();
-    const joinedData = MOCK_MYSQL_TABLES[joinedTableName];
+    const joinedData = state.tables[joinedTableName];
 
     if (!joinedData) {
       throw new Error(`Joined table '${joinedTableName}' does not exist.`);
@@ -299,10 +760,108 @@ function parseAndExecuteSelectQuery(sql: string, startTime: number): SqlQueryRes
   }
 
   // Extract WHERE clause
-  const whereMatch = remainder.match(/WHERE\s+(.*?)(?:\s+ORDER\s+BY|\s+LIMIT|$)/is);
+  const whereMatch = remainder.match(/WHERE\s+([\s\S]*?)(?:\s+GROUP\s+BY|\s+ORDER\s+BY|\s+LIMIT|$)/is);
   if (whereMatch) {
     const whereExpr = whereMatch[1].trim();
     workingRows = workingRows.filter((row) => evaluateWhereClause(row, whereExpr));
+  }
+
+  // Handle GROUP BY and/or aggregate functions (COUNT, AVG, SUM, MIN, MAX)
+  const groupMatch = remainder.match(/GROUP\s+BY\s+([a-zA-Z0-9_.]+)/i);
+  const rawSelectTokens = rawCols === '*' ? [] : rawCols.split(',').map((c) => c.trim()).filter(Boolean);
+  const hasAggregate = rawSelectTokens.some((tok) => /^(COUNT|AVG|SUM|MIN|MAX)\s*\(/i.test(tok));
+
+  if (groupMatch || hasAggregate) {
+    const groupCol = groupMatch ? groupMatch[1].trim() : null;
+    const groups = new Map<string, Record<string, any>[]>();
+    if (groupCol) {
+      for (const r of workingRows) {
+        const keyVal = r[groupCol] !== undefined ? r[groupCol] : r[groupCol.split('.').pop() || ''];
+        const key = String(keyVal ?? 'NULL');
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key)!.push(r);
+      }
+    } else {
+      groups.set('__ALL__', workingRows);
+    }
+
+    const parsedSelectExprs = rawSelectTokens.map((expr) => {
+      const asMatch = expr.match(/^([\s\S]+?)\s+AS\s+([a-zA-Z0-9_]+)$/i);
+      const baseExpr = (asMatch ? asMatch[1] : expr).trim();
+      const label = (asMatch ? asMatch[2] : baseExpr).trim();
+      return { baseExpr, label };
+    });
+
+    const aggregatedRows: Record<string, any>[] = [];
+    for (const [, groupRows] of groups.entries()) {
+      const aggRow: Record<string, any> = {};
+      for (const { baseExpr, label } of parsedSelectExprs) {
+        const aggFn = baseExpr.match(/^(COUNT|AVG|SUM|MIN|MAX)\s*\(\s*([^)]+)\s*\)$/i);
+        if (aggFn) {
+          const fn = aggFn[1].toUpperCase();
+          const arg = aggFn[2].trim();
+          let val: number | null = 0;
+          if (fn === 'COUNT') {
+            val = arg === '*'
+              ? groupRows.length
+              : groupRows.filter((r) => (r[arg] ?? r[arg.split('.').pop() || '']) != null).length;
+          } else {
+            const nums = groupRows
+              .map((r) => Number(r[arg] ?? r[arg.split('.').pop() || '']))
+              .filter((n) => !Number.isNaN(n));
+            if (nums.length === 0) {
+              val = null;
+            } else if (fn === 'SUM') {
+              val = Math.round(nums.reduce((a, b) => a + b, 0) * 100) / 100;
+            } else if (fn === 'AVG') {
+              val = Math.round((nums.reduce((a, b) => a + b, 0) / nums.length) * 100) / 100;
+            } else if (fn === 'MIN') {
+              val = Math.min(...nums);
+            } else if (fn === 'MAX') {
+              val = Math.max(...nums);
+            }
+          }
+          aggRow[label] = val;
+        } else {
+          const sample = groupRows[0] || {};
+          aggRow[label] = sample[baseExpr] ?? sample[baseExpr.split('.').pop() || ''] ?? null;
+        }
+      }
+      aggregatedRows.push(aggRow);
+    }
+
+    const orderMatchAgg = remainder.match(/ORDER\s+BY\s+([a-zA-Z0-9_.]+)(?:\s+(ASC|DESC))?/i);
+    if (orderMatchAgg) {
+      const orderCol = orderMatchAgg[1].trim();
+      const isDesc = (orderMatchAgg[2] || '').toUpperCase() === 'DESC';
+      aggregatedRows.sort((a, b) => {
+        const valA = a[orderCol];
+        const valB = b[orderCol];
+        if (valA === valB) return 0;
+        if (valA == null) return 1;
+        if (valB == null) return -1;
+        if (typeof valA === 'number' && typeof valB === 'number') {
+          return isDesc ? valB - valA : valA - valB;
+        }
+        return isDesc
+          ? String(valB).localeCompare(String(valA))
+          : String(valA).localeCompare(String(valB));
+      });
+    }
+
+    const limitMatchAgg = remainder.match(/LIMIT\s+(\d+)/i);
+    const slicedAgg = limitMatchAgg
+      ? aggregatedRows.slice(0, Math.max(0, parseInt(limitMatchAgg[1], 10)))
+      : aggregatedRows;
+
+    const cols = parsedSelectExprs.map((p) => p.label);
+    return {
+      columns: cols,
+      rows: slicedAgg.map((r) => cols.map((c) => r[c] ?? null)),
+      rowCount: slicedAgg.length,
+      executionTimeMs: Math.max(1, Math.round(performance.now() - startTime)),
+      queryType: 'SELECT'
+    };
   }
 
   // Extract ORDER BY clause
@@ -338,10 +897,9 @@ function parseAndExecuteSelectQuery(sql: string, startTime: number): SqlQueryRes
   let projectedCols: string[] = [];
   if (rawCols === '*') {
     if (workingRows.length > 0) {
-      // Filter out dot-prefixed duplicate keys from joins for clean view
       projectedCols = Object.keys(workingRows[0]).filter((k) => !k.includes('.'));
     } else {
-      const schema = MYSQL_SCHEMAS.find((s) => s.name === primaryTable);
+      const schema = state.schemas.find((s) => s.name === primaryTable);
       projectedCols = schema ? schema.columns.map((c) => c.name) : ['id'];
     }
   } else {
@@ -350,14 +908,21 @@ function parseAndExecuteSelectQuery(sql: string, startTime: number): SqlQueryRes
 
   const resultRows = workingRows.map((row) => {
     return projectedCols.map((colExpr) => {
-      if (row[colExpr] !== undefined) return row[colExpr];
-      const simpleCol = colExpr.split('.').pop() || colExpr;
+      const asMatch = colExpr.match(/^([\s\S]+?)\s+AS\s+([a-zA-Z0-9_]+)$/i);
+      const actualCol = asMatch ? asMatch[1].trim() : colExpr;
+      if (row[actualCol] !== undefined) return row[actualCol];
+      const simpleCol = actualCol.split('.').pop() || actualCol;
       return row[simpleCol] !== undefined ? row[simpleCol] : null;
     });
   });
 
+  const displayColumns = projectedCols.map((colExpr) => {
+    const asMatch = colExpr.match(/^([\s\S]+?)\s+AS\s+([a-zA-Z0-9_]+)$/i);
+    return asMatch ? asMatch[2].trim() : colExpr;
+  });
+
   return {
-    columns: projectedCols,
+    columns: displayColumns,
     rows: resultRows,
     rowCount: resultRows.length,
     executionTimeMs: Math.max(1, Math.round(performance.now() - startTime)),
@@ -625,4 +1190,455 @@ export function evaluateFullStackChallenge(
   }
 
   return { passed, message, score, matchedKeywords: matched, missingKeywords: missing };
+}
+
+// ==================== SPRING BOOT + JAVA + MYSQL CODE GENERATOR ====================
+
+export interface SpringBootFieldSpec {
+  name: string;
+  javaType: 'String' | 'Double' | 'Integer' | 'Boolean';
+  mysqlType: string;
+}
+
+export interface SpringBootEntitySpec {
+  id: string;
+  entityName: string;
+  tableName: string;
+  endpointPath: string;
+  description: string;
+  fields: SpringBootFieldSpec[];
+  samplePostPayload: Record<string, string | number | boolean>;
+}
+
+export interface GeneratedSpringBootBundle {
+  entityJava: string;
+  repositoryJava: string;
+  controllerJava: string;
+  mysqlDdl: string;
+  frontendJs: string;
+  hibernateSqlTrace: string;
+}
+
+export const SPRING_BOOT_ENTITY_TEMPLATES: SpringBootEntitySpec[] = [
+  {
+    id: 'job',
+    entityName: 'Job',
+    tableName: 'jobs',
+    endpointPath: '/api/jobs',
+    description: 'Engineering job postings persisted in MySQL and exposed via Spring Boot REST API.',
+    fields: [
+      { name: 'title', javaType: 'String', mysqlType: 'VARCHAR(120) NOT NULL' },
+      { name: 'company', javaType: 'String', mysqlType: 'VARCHAR(80) NOT NULL' },
+      { name: 'location', javaType: 'String', mysqlType: 'VARCHAR(60) NOT NULL' },
+      { name: 'skills', javaType: 'String', mysqlType: 'VARCHAR(255) NOT NULL' },
+      { name: 'ctc', javaType: 'String', mysqlType: 'VARCHAR(40)' }
+    ],
+    samplePostPayload: {
+      title: 'Java Spring Boot Microservices Engineer',
+      company: 'Zoho',
+      location: 'Chennai',
+      skills: 'java,springboot,mysql,docker',
+      ctc: '12.5 LPA'
+    }
+  },
+  {
+    id: 'user-alert',
+    entityName: 'UserAlert',
+    tableName: 'user_alerts',
+    endpointPath: '/api/user-alerts',
+    description: 'Skill-watched job alert subscriptions persisted in MySQL for browser push triggers.',
+    fields: [
+      { name: 'userEmail', javaType: 'String', mysqlType: 'VARCHAR(120) NOT NULL' },
+      { name: 'sourceJobId', javaType: 'Integer', mysqlType: 'INT NOT NULL' },
+      { name: 'watchedSkills', javaType: 'String', mysqlType: 'VARCHAR(255) NOT NULL' },
+      { name: 'pushEnabled', javaType: 'Boolean', mysqlType: 'TINYINT(1) DEFAULT 1' }
+    ],
+    samplePostPayload: {
+      userEmail: 'harish@jobnova.in',
+      sourceJobId: 1,
+      watchedSkills: 'java,springboot,mysql',
+      pushEnabled: true
+    }
+  },
+  {
+    id: 'student-application',
+    entityName: 'JobApplication',
+    tableName: 'applications',
+    endpointPath: '/api/applications',
+    description: 'Tracks candidate application stages across Applied, Interviewing, and Offer Received.',
+    fields: [
+      { name: 'studentId', javaType: 'Integer', mysqlType: 'INT NOT NULL' },
+      { name: 'jobId', javaType: 'Integer', mysqlType: 'INT NOT NULL' },
+      { name: 'stage', javaType: 'String', mysqlType: 'VARCHAR(40) NOT NULL' },
+      { name: 'appliedAt', javaType: 'String', mysqlType: 'VARCHAR(32)' }
+    ],
+    samplePostPayload: {
+      studentId: 101,
+      jobId: 2,
+      stage: 'Interviewing',
+      appliedAt: '2026-11-12'
+    }
+  }
+];
+
+function toSnakeCase(input: string): string {
+  return input.replace(/([a-z0-9])([A-Z])/g, '$1_$2').toLowerCase();
+}
+
+function capitalize(input: string): string {
+  return input ? input.charAt(0).toUpperCase() + input.slice(1) : '';
+}
+
+export function generateSpringBootFullStackBundle(spec: SpringBootEntitySpec): GeneratedSpringBootBundle {
+  const entity = capitalize(spec.entityName.trim()) || 'Job';
+  const varName = entity.charAt(0).toLowerCase() + entity.slice(1);
+  const table = spec.tableName.trim() || `${toSnakeCase(entity)}s`;
+  const firstStringField = spec.fields.find((f) => f.javaType === 'String')?.name || spec.fields[0]?.name || 'title';
+  const firstStringCap = capitalize(firstStringField);
+
+  const entityFields = spec.fields
+    .map(
+      (f) =>
+        `    @Column(name = "${toSnakeCase(f.name)}", nullable = false)\n    private ${f.javaType} ${f.name};`
+    )
+    .join('\n\n');
+
+  const gettersSetters = spec.fields
+    .map(
+      (f) =>
+        `    public ${f.javaType} get${capitalize(f.name)}() { return ${f.name}; }\n    public void set${capitalize(f.name)}(${f.javaType} ${f.name}) { this.${f.name} = ${f.name}; }`
+    )
+    .join('\n\n');
+
+  const entityJava = `package com.jobnova.model;
+
+import jakarta.persistence.*;
+
+@Entity
+@Table(name = "${table}")
+public class ${entity} {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+${entityFields}
+
+    public ${entity}() {}
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+
+${gettersSetters}
+}`;
+
+  const repositoryJava = `package com.jobnova.repository;
+
+import com.jobnova.model.${entity};
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
+import org.springframework.stereotype.Repository;
+import java.util.List;
+
+@Repository
+public interface ${entity}Repository extends JpaRepository<${entity}, Long> {
+    List<${entity}> findBy${firstStringCap}ContainingIgnoreCase(String keyword);
+
+    @Query(value = "SELECT * FROM ${table} ORDER BY id DESC LIMIT :limit", nativeQuery = true)
+    List<${entity}> findRecentRecords(@Param("limit") int limit);
+}`;
+
+  const controllerJava = `package com.jobnova.controller;
+
+import com.jobnova.model.${entity};
+import com.jobnova.repository.${entity}Repository;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+import java.util.List;
+
+@RestController
+@RequestMapping("${spec.endpointPath}")
+@CrossOrigin(origins = "http://localhost:3000")
+public class ${entity}Controller {
+    private final ${entity}Repository repository;
+
+    public ${entity}Controller(${entity}Repository repository) {
+        this.repository = repository;
+    }
+
+    @GetMapping
+    @Transactional(readOnly = true)
+    public List<${entity}> listAll() {
+        return repository.findAll();
+    }
+
+    @PostMapping
+    @Transactional
+    public ResponseEntity<${entity}> create(@RequestBody ${entity} payload) {
+        ${entity} saved = repository.save(payload);
+        return ResponseEntity.status(HttpStatus.CREATED).body(saved);
+    }
+
+    @DeleteMapping("/{id}")
+    @Transactional
+    public ResponseEntity<Void> remove(@PathVariable Long id) {
+        repository.deleteById(id);
+        return ResponseEntity.noContent().build();
+    }
+}`;
+
+  const ddlCols = [
+    '  `id` BIGINT NOT NULL AUTO_INCREMENT',
+    ...spec.fields.map((f) => `  \`${toSnakeCase(f.name)}\` ${f.mysqlType}`),
+    '  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+    '  PRIMARY KEY (`id`)',
+    `  INDEX \`idx_${table}_${toSnakeCase(firstStringField)}\` (\`${toSnakeCase(firstStringField)}\`)`
+  ];
+
+  const mysqlDdl = `-- MySQL 8.0 Schema for JobNova (${entity})
+CREATE TABLE IF NOT EXISTS \`${table}\` (
+${ddlCols.join(',\n')}
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`;
+
+  const frontendJs = `// HTML5 + JavaScript Fetch Client for Spring Boot ${entity}Controller
+async function load${entity}Records() {
+  const res = await fetch('${spec.endpointPath}');
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const items = await res.json();
+  console.log('Loaded ${table}:', items.length);
+  return items;
+}
+
+async function create${entity}(payload) {
+  const res = await fetch('${spec.endpointPath}', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  return res.json();
+}`;
+
+  const selectCols = ['id', ...spec.fields.map((f) => toSnakeCase(f.name))].join(', ');
+  const hibernateSqlTrace = `Hibernate: select ${varName}1_0.${selectCols.replace(/, /g, `, ${varName}1_0.`)} from ${table} ${varName}1_0`;
+
+  return {
+    entityJava,
+    repositoryJava,
+    controllerJava,
+    mysqlDdl,
+    frontendJs,
+    hibernateSqlTrace
+  };
+}
+
+// ==================== HTML5 + CSS3 + JAVASCRIPT SANDBOX ====================
+
+export interface WebSandboxPreset {
+  id: string;
+  name: string;
+  description: string;
+  html: string;
+  css: string;
+  js: string;
+}
+
+export const WEB_SANDBOX_PRESETS: WebSandboxPreset[] = [
+  {
+    id: 'api-job-explorer',
+    name: 'Live API Job Cards (Fetch + CSS Grid)',
+    description: 'Fetches live roles from /api/jobs, filters by skill in JavaScript, and renders responsive CSS Grid cards.',
+    html: `<section class="shell">
+  <header class="topbar">
+    <div>
+      <p class="eyebrow">HTML5 · CSS3 · JavaScript + Backend API</p>
+      <h2>JobNova Live Stack Explorer</h2>
+    </div>
+    <input id="skill-filter" type="search" placeholder="Filter skill (java, springboot, mysql, react)..." />
+  </header>
+  <div id="status-bar" class="status">Loading /api/jobs...</div>
+  <div id="jobs-grid" class="grid"></div>
+</section>`,
+    css: `* { box-sizing: border-box; }
+body { margin: 0; font-family: Inter, system-ui, sans-serif; background: #f8fafc; color: #0f172a; padding: 18px; }
+.shell { max-width: 900px; margin: 0 auto; }
+.topbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.eyebrow { margin: 0 0 2px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: #2557A7; }
+h2 { margin: 0; font-size: 18px; }
+#skill-filter { padding: 8px 12px; min-width: 260px; border: 1.5px solid #94a3b8; border-radius: 8px; font-size: 13px; background: #fff; }
+.status { font-size: 12px; color: #475569; margin-bottom: 12px; font-family: monospace; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.card { background: #fff; border: 1.5px solid #b8c4d4; border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 6px; }
+.card-head { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.company { font-size: 12px; font-weight: 600; color: #475569; }
+.ctc { font-size: 12px; font-weight: 700; color: #087F31; font-family: monospace; }
+.title { font-size: 14px; font-weight: 700; margin: 0; }
+.skills { font-size: 11px; color: #2557A7; font-family: monospace; }`,
+    js: `const grid = document.getElementById('jobs-grid');
+const status = document.getElementById('status-bar');
+const filterInput = document.getElementById('skill-filter');
+let allJobs = [];
+
+function render(list) {
+  grid.innerHTML = list.slice(0, 6).map((j) => \`
+    <article class="card">
+      <div class="card-head">
+        <span class="company">\${j.company} · \${j.location}</span>
+        <span class="ctc">\${j.ctc || 'Competitive'}</span>
+      </div>
+      <h3 class="title">\${j.title}</h3>
+      <div class="skills">\${j.skills}</div>
+    </article>
+  \`).join('');
+}
+
+async function init() {
+  try {
+    const res = await fetch('/api/jobs');
+    allJobs = await res.json();
+    status.textContent = \`Connected: \${allJobs.length} roles loaded from /api/jobs\`;
+    console.log('Fetched jobs count:', allJobs.length);
+    render(allJobs);
+  } catch (err) {
+    status.textContent = 'Offline fallback preview active';
+    console.warn('API fetch fallback:', err.message);
+  }
+}
+
+filterInput.addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  const filtered = allJobs.filter((j) =>
+    (j.title + ' ' + j.skills + ' ' + j.company).toLowerCase().includes(q)
+  );
+  status.textContent = \`Showing \${filtered.length} matching roles\`;
+  render(filtered);
+});
+
+init();`
+  },
+  {
+    id: 'pipeline-widget',
+    name: 'Application Stage Tracker (Interactive DOM)',
+    description: 'Interactive vanilla JavaScript pipeline card switching between Applied, Interviewing, and Offer.',
+    html: `<div class="panel">
+  <div class="header">
+    <div>
+      <span class="badge">Java + Spring Boot · TCS</span>
+      <h2>Backend Engineer Application</h2>
+    </div>
+    <span id="stage-label" class="stage">Interviewing</span>
+  </div>
+  <div class="steps" id="steps">
+    <button data-stage="Applied">1. Applied</button>
+    <button data-stage="Interviewing" class="active">2. Interviewing</button>
+    <button data-stage="Offer Received">3. Offer Received</button>
+  </div>
+  <p id="log" class="log">Current milestone: Technical round scheduled with Spring Boot & MySQL panel.</p>
+</div>`,
+    css: `body { margin: 0; padding: 20px; font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; }
+.panel { max-width: 580px; margin: 0 auto; background: #1e293b; border: 1.5px solid #475569; border-radius: 12px; padding: 18px; }
+.header { display: flex; justify-content: space-between; align-items: start; gap: 12px; margin-bottom: 14px; }
+.badge { font-size: 11px; color: #93c5fd; font-family: monospace; }
+h2 { margin: 4px 0 0; font-size: 18px; }
+.stage { padding: 4px 10px; border-radius: 6px; border: 1px solid #38bdf8; color: #38bdf8; font-size: 12px; font-weight: 700; }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.steps button { padding: 9px 10px; border-radius: 8px; border: 1.5px solid #475569; background: #0f172a; color: #cbd5e1; font-weight: 600; cursor: pointer; }
+.steps button.active { background: #2557A7; border-color: #60a5fa; color: #fff; }
+.log { margin: 14px 0 0; font-size: 13px; color: #cbd5e1; }`,
+    js: `const buttons = document.querySelectorAll('#steps button');
+const label = document.getElementById('stage-label');
+const log = document.getElementById('log');
+
+buttons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    buttons.forEach((b) => b.classList.remove('active'));
+    btn.classList.add('active');
+    const stage = btn.dataset.stage;
+    label.textContent = stage;
+    log.textContent = 'Stage updated to: ' + stage;
+    console.log('Pipeline stage changed ->', stage);
+  });
+});`
+  }
+];
+
+export function compileWebSandboxDocument(params: {
+  html: string;
+  css: string;
+  js: string;
+}): string {
+  const safeJs = params.js.replace(/<\/script>/gi, '<\\/script>');
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>${params.css}</style>
+</head>
+<body>
+${params.html}
+<script>
+(function() {
+  function postConsole(level, args) {
+    try {
+      var text = Array.prototype.slice.call(args).map(function(item) {
+        if (typeof item === 'object') {
+          try { return JSON.stringify(item); } catch (e) { return String(item); }
+        }
+        return String(item);
+      }).join(' ');
+      window.parent.postMessage({ type: 'JOBNOVA_SANDBOX_CONSOLE', level: level, message: text }, '*');
+    } catch (e) {}
+  }
+  var origLog = console.log;
+  var origWarn = console.warn;
+  var origError = console.error;
+  console.log = function() { postConsole('log', arguments); return origLog.apply(console, arguments); };
+  console.warn = function() { postConsole('warn', arguments); return origWarn.apply(console, arguments); };
+  console.error = function() { postConsole('error', arguments); return origError.apply(console, arguments); };
+  window.addEventListener('error', function(e) {
+    postConsole('error', [e.message || 'Runtime Error']);
+  });
+
+  var pendingFetches = {};
+  var reqCounter = 0;
+  window.addEventListener('message', function(ev) {
+    if (ev.data && ev.data.type === 'JOBNOVA_SANDBOX_FETCH_RES' && pendingFetches[ev.data.reqId]) {
+      var entry = pendingFetches[ev.data.reqId];
+      delete pendingFetches[ev.data.reqId];
+      if (ev.data.error) {
+        entry.reject(new Error(ev.data.error));
+      } else {
+        entry.resolve({
+          ok: ev.data.ok,
+          status: ev.data.status,
+          json: function() { return Promise.resolve(ev.data.data); },
+          text: function() { return Promise.resolve(JSON.stringify(ev.data.data)); }
+        });
+      }
+    }
+  });
+  var origFetch = window.fetch ? window.fetch.bind(window) : null;
+  window.fetch = function(url, options) {
+    if (typeof url === 'string' && url.startsWith('/api/')) {
+      return new Promise(function(resolve, reject) {
+        var reqId = 'req_' + (++reqCounter);
+        pendingFetches[reqId] = { resolve: resolve, reject: reject };
+        window.parent.postMessage({ type: 'JOBNOVA_SANDBOX_FETCH_REQ', reqId: reqId, url: url, options: options || {} }, '*');
+      });
+    }
+    return origFetch ? origFetch(url, options) : Promise.reject(new Error('Fetch unavailable'));
+  };
+})();
+</script>
+<script>
+try {
+${safeJs}
+} catch (err) {
+  console.error(err && err.message ? err.message : String(err));
+}
+</script>
+</body>
+</html>`;
 }

@@ -2088,6 +2088,47 @@ export function toggleThemeSetting(settings: UserSettings): UserSettings {
   };
 }
 
+export interface ThemeToggleMeta {
+  theme: 'light' | 'dark';
+  isDark: boolean;
+  currentLabel: 'Light' | 'Dark';
+  nextModeLabel: 'Light Mode' | 'Dark Mode';
+  ariaLabel: string;
+  title: string;
+  feedbackBadgeText: string;
+  announcementText: string;
+}
+
+/**
+ * Pure helper computing accessible labels, tooltip titles, and visual feedback copy
+ * for the navigation bar theme switch.
+ */
+export function getThemeToggleMeta(theme: UserSettings['theme'] = 'light'): ThemeToggleMeta {
+  const isDark = theme === 'dark';
+  if (isDark) {
+    return {
+      theme: 'dark',
+      isDark: true,
+      currentLabel: 'Dark',
+      nextModeLabel: 'Light Mode',
+      ariaLabel: 'Theme: Dark Mode active. Switch to Light Mode',
+      title: 'Switch to Light Mode',
+      feedbackBadgeText: 'Dark Mode Active',
+      announcementText: 'Switched to Dark Mode'
+    };
+  }
+  return {
+    theme: 'light',
+    isDark: false,
+    currentLabel: 'Light',
+    nextModeLabel: 'Dark Mode',
+    ariaLabel: 'Theme: Light Mode active. Switch to Dark Mode',
+    title: 'Switch to Dark Mode',
+    feedbackBadgeText: 'Light Mode Active',
+    announcementText: 'Switched to Light Mode'
+  };
+}
+
 export interface ResumeHealthPillar {
   id: 'profile' | 'skills' | 'education' | 'certifications';
   label: string;
