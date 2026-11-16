@@ -81,6 +81,7 @@ import { SignUpView } from './components/SignUpView';
 import { UserAlertsPanel } from './components/UserAlertsPanel';
 import { QuickInterviewTipsModal } from './components/QuickInterviewTipsModal';
 import { InterviewPrepView } from './components/InterviewPrepView';
+import { TopRoleSkillRadarCard } from './components/TopRoleSkillRadarCard';
 import { generateQuickInterviewTips } from './utils/quickInterviewTipsLogic';
 import { getPathnameForTab, resolveTabFromPathname } from './utils/authLogic';
 import {
@@ -142,6 +143,7 @@ export default function App() {
   const [showSavedJobsOnly, setShowSavedJobsOnly] = useState(false);
   const [jobSortBy, setJobSortBy] = useState<JobSortOption>('featured');
   const [selectedJobId, setSelectedJobId] = useState<number>(SEED_JOBS[0].id);
+  const [selectedTopRoleId, setSelectedTopRoleId] = useState<number | null>(null);
   const [bookmarkedJobIds, setBookmarkedJobIds] = useState<number[]>(() => {
     try {
       const cached = localStorage.getItem('jobnova_bookmarked_job_ids');
@@ -849,6 +851,16 @@ export default function App() {
   const activeSelectedJob =
     sortedJobs.find((j) => j.id === selectedJobId) || sortedJobs[0] || null;
 
+  const topMatchedJobs = sortJobsList(jobs, {
+    sortBy: 'match-desc',
+    userSkills: user?.skills || DEFAULT_USER_PROFILE.skills,
+    expectedMinLpa: settings.expectedSalaryMinLpa,
+    expectedMaxLpa: settings.expectedSalaryMaxLpa
+  }).slice(0, 4);
+
+  const activeTopRoleJob =
+    topMatchedJobs.find((j) => j.id === selectedTopRoleId) || topMatchedJobs[0] || null;
+
   const activeSelectedJobBreakdown = activeSelectedJob
     ? computeJobMatchBreakdown({
         job: activeSelectedJob,
@@ -1289,7 +1301,7 @@ export default function App() {
 
             {/* Clean 2-Column Workspace: Left 8 Cols Top Matched Roles, Right 4 Cols Active Applications & Toolkit */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-              {/* Left 8 Cols: Top Matched Roles */}
+              {/* Left 8 Cols: Top Matched Roles + D3 Skill Radar Comparison */}
               <section className="lg:col-span-8 space-y-4">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div>
@@ -1297,13 +1309,13 @@ export default function App() {
                       Top Roles Matching Your Profile Skills
                     </h2>
                     <p className="text-xs text-slate-600 dark:text-slate-400">
-                      Matched <span className="font-mono font-semibold tabular-nums text-[#2557A7] dark:text-blue-400">{careerStats.matchedJobsCount}</span> of <span className="font-mono tabular-nums">{jobs.length}</span> open roles · Stack: <span className="font-mono text-slate-700 dark:text-slate-300">{(user?.skills || DEFAULT_USER_PROFILE.skills).join(' · ')}</span>
+                      Matched <span className="font-mono font-semibold tabular-nums text-[#007AFF] dark:text-[#3898FF]">{careerStats.matchedJobsCount}</span> of <span className="font-mono tabular-nums">{jobs.length}</span> open roles · Select any role to compare its skill requirements on the radar
                     </p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setActiveTab('jobs')}
-                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#2557A7] dark:text-blue-400 hover:underline cursor-pointer"
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#007AFF] dark:text-[#3898FF] hover:underline cursor-pointer whitespace-nowrap shrink-0"
                   >
                     <span>View all {jobs.length} jobs</span>
                     <ArrowRight className="w-3.5 h-3.5" />
@@ -1311,11 +1323,18 @@ export default function App() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {jobs.slice(0, 4).map((job) => {
+                  {topMatchedJobs.map((job) => {
                     const isApplied = appliedJobIds.includes(job.id);
                     const isBookmarked = bookmarkedJobIds.includes(job.id);
+                    const isRadarSelected = activeTopRoleJob?.id === job.id;
                     const badge = getCompanyMonogram(job.company);
                     const skillsList = job.skills.split(',').map((s) => s.trim()).filter(Boolean);
+                    const matchBreakdown = computeJobMatchBreakdown({
+                      job,
+                      userSkills: user?.skills || DEFAULT_USER_PROFILE.skills,
+                      expectedMinLpa: settings.expectedSalaryMinLpa,
+                      expectedMaxLpa: settings.expectedSalaryMaxLpa
+                    });
                     const linkedInUrl = buildLinkedInShareUrl({
                       title: job.title,
                       company: job.company,
@@ -1328,7 +1347,12 @@ export default function App() {
                     return (
                       <article
                         key={job.id}
-                        className="ios-card-interactive bg-white/95 dark:bg-[#151822]/95 border border-slate-200/80 dark:border-slate-800 hover:border-[#007AFF] dark:hover:border-blue-500 p-5 flex flex-col justify-between space-y-4"
+                        data-testid={`top-role-card-${job.id}`}
+                        className={`ios-card-interactive bg-white/95 dark:bg-[#151822]/95 border p-5 flex flex-col justify-between space-y-4 transition-colors ${
+                          isRadarSelected
+                            ? 'border-[#007AFF] ring-1 ring-[#007AFF] dark:border-[#3898FF] dark:ring-[#3898FF]'
+                            : 'border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                        }`}
                       >
                         <div className="space-y-3">
                           <div className="flex items-start justify-between gap-2">
@@ -1379,17 +1403,23 @@ export default function App() {
                           <div>
                             <button
                               type="button"
-                              onClick={() => {
-                                setSelectedJobId(job.id);
-                                setActiveTab('jobs');
-                              }}
-                              className="text-left text-base font-bold text-slate-900 dark:text-slate-100 hover:text-[#007AFF] dark:hover:text-[#3898FF] cursor-pointer"
+                              data-testid={`top-role-select-${job.id}`}
+                              aria-pressed={isRadarSelected}
+                              onClick={() => setSelectedTopRoleId(job.id)}
+                              className="w-full text-left group cursor-pointer focus-visible:outline-2 focus-visible:outline-[#007AFF] rounded-lg"
                             >
-                              {job.title}
+                              <div className="flex items-baseline justify-between gap-2">
+                                <span className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#007AFF] dark:group-hover:text-[#3898FF]">
+                                  {job.title}
+                                </span>
+                                <span className="text-[11px] font-mono font-semibold tabular-nums text-[#007AFF] dark:text-[#3898FF] whitespace-nowrap shrink-0">
+                                  {matchBreakdown.matchPercent}% match
+                                </span>
+                              </div>
+                              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                                {job.description}
+                              </p>
                             </button>
-                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                              {job.description}
-                            </p>
                           </div>
 
                           <div className="text-xs font-mono text-slate-500 dark:text-slate-400">
@@ -1397,16 +1427,43 @@ export default function App() {
                           </div>
                         </div>
 
-                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                          <a
-                            href={linkedInUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-[#007AFF] dark:hover:text-[#3898FF]"
-                          >
-                            <Share2 className="w-3.5 h-3.5" />
-                            <span>Share on LinkedIn</span>
-                          </a>
+                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-3">
+                            <button
+                              type="button"
+                              data-testid={`top-role-compare-btn-${job.id}`}
+                              aria-pressed={isRadarSelected}
+                              onClick={() => setSelectedTopRoleId(job.id)}
+                              className={`text-xs font-semibold cursor-pointer whitespace-nowrap ${
+                                isRadarSelected
+                                  ? 'text-[#007AFF] dark:text-[#3898FF]'
+                                  : 'text-slate-600 dark:text-slate-300 hover:text-[#007AFF] dark:hover:text-[#3898FF]'
+                              }`}
+                            >
+                              {isRadarSelected ? 'On Radar ✓' : 'Compare Fit'}
+                            </button>
+                            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedJobId(job.id);
+                                setActiveTab('jobs');
+                              }}
+                              className="text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-[#007AFF] dark:hover:text-[#3898FF] cursor-pointer whitespace-nowrap"
+                            >
+                              Details
+                            </button>
+                            <a
+                              href={linkedInUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              aria-label={`Share ${job.title} at ${job.company} on LinkedIn`}
+                              className="text-slate-500 dark:text-slate-400 hover:text-[#007AFF] dark:hover:text-[#3898FF]"
+                            >
+                              <Share2 className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+
                           <button
                             type="button"
                             onClick={() => handleToggleJobApply(job)}
@@ -1423,6 +1480,27 @@ export default function App() {
                     );
                   })}
                 </div>
+
+                {/* D3 Radar Chart Comparing User Skill Proficiency vs Selected Top-Matched Job */}
+                <TopRoleSkillRadarCard
+                  selectedJob={activeTopRoleJob}
+                  topJobs={topMatchedJobs}
+                  userSkills={user?.skills || DEFAULT_USER_PROFILE.skills}
+                  enrolledCourseIds={enrolledCourseIds}
+                  savedCertIds={savedCertIds}
+                  customProficiencyOverrides={user?.skillProficiencies || {}}
+                  isDarkMode={settings.theme === 'dark'}
+                  onSelectTopJob={(jobId) => setSelectedTopRoleId(jobId)}
+                  onInspectJob={(jobId) => {
+                    setSelectedJobId(jobId);
+                    setActiveTab('jobs');
+                  }}
+                  onNavigateToLearning={(skillKeyword) => {
+                    if (skillKeyword) setCourseQuery(skillKeyword);
+                    setActiveTab('learning');
+                  }}
+                  onNavigateToProfileSkills={() => setActiveTab('profile')}
+                />
               </section>
 
               {/* Right 4 Cols: Compact Active Applications & Career Toolkit */}
