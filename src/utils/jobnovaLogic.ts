@@ -152,6 +152,7 @@ export function matchOfflineCareerAssistant(prompt: string): string {
     normalized.includes('finish my profile') ||
     normalized.includes('profile completion') ||
     normalized.includes('missing sections') ||
+    normalized.includes('profile creation') ||
     (normalized.includes('work history') && normalized.includes('education'))
   ) {
     const tips: string[] = [];
@@ -172,10 +173,37 @@ export function matchOfflineCareerAssistant(prompt: string): string {
     }
     if (tips.length === 0) {
       tips.push(
-        '• Final Recruiter Polish: Quantify impact metrics in your latest work role, align top 8 skills with your target Full-Stack/Java JD, and verify your Education CGPA and coursework are visible.'
+        '• Step 1 — About & Headline: Write a 3-sentence engineering bio highlighting your Java 17, Spring Boot 3, and React.js projects with measurable latency/throughput gains.',
+        '• Step 2 — Education Page: Add your B.E./B.Tech degree, institution, graduation year, CGPA (8.9/10), and Core CS coursework (DSA, DBMS, OS, Computer Networks).',
+        '• Step 3 — Resume & Experience: Quantify 2–3 internship or capstone project bullets using the STAR method and export your A4 PDF resume.'
       );
     }
-    return `Personalized AI Profile Completion Plan:\n${tips.join('\n')}\n• Quick Shortcut: Use "Sync from LinkedIn" in Profile & Settings or copy these tailored bullets directly into your Work Experience, Skills, and Education fields.`;
+    return `Personalized AI Profile Creation & Completion Plan:\n${tips.join('\n')}\n• Quick Shortcut: Open the Profile Hub sub-pages (About, Education, Resume, Skills) or click "Sync from LinkedIn" to auto-populate your portfolio.`;
+  }
+
+  if (
+    normalized.includes('about summary') ||
+    normalized.includes('about bio') ||
+    normalized.includes('write my bio') ||
+    normalized.includes('professional summary') ||
+    (normalized.includes('about') && normalized.includes('profile'))
+  ) {
+    return `AI-Crafted About / Bio Summary for Your Profile:
+• Recommended Headline: "Full-Stack Software Engineer | Java 17 · Spring Boot 3 · React.js · MySQL | Cloud & Microservices"
+• Ready-to-Use Bio Summary: "Results-driven Computer Science Engineer specializing in high-throughput Java & Spring Boot microservices and responsive React.js web applications. Experienced in designing RESTful APIs, optimizing MySQL/InnoDB queries, and deploying containerized services on AWS. Passionate about clean architecture, distributed systems, and shipping user-centric software."
+• Pro Tip: Go to Profile → About & Bio and click "AI Polish Bio" to apply this directly to your profile!`;
+  }
+
+  if (
+    normalized.includes('education section') ||
+    normalized.includes('format my education') ||
+    normalized.includes('cgpa') ||
+    normalized.includes('academic')
+  ) {
+    return `AI Education & Academic Section Formatting Guide:
+• Recommended Format: "B.E. Computer Science & Engineering · Anna University (2021 – 2025) · CGPA: 8.9/10 · Coursework: Data Structures & Algorithms, DBMS, Operating Systems, Distributed Systems"
+• Highlight High-Signal Coursework: Always list 4–5 core engineering subjects (DSA, DBMS, OS, Computer Networks, Cloud Computing) so ATS parsers match you to Tier-1 SDE roles.
+• Include Academic Honors: Mention Hackathon wins, Dean's List, or IEEE/ACM student chapter leadership in your Education cards.`;
   }
 
   if (normalized.includes('spring boot') || normalized.includes('springboot') || normalized.includes('java') || normalized.includes('spring')) {

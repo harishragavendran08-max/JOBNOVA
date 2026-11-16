@@ -225,11 +225,13 @@ export function resolveTabFromPathname(pathname: string): ActiveTab {
   const normalized = pathname.replace(/\/+$/, '').toLowerCase();
   if (normalized === '/login') return 'login';
   if (normalized === '/signup') return 'signup';
+  if (normalized === '/interview-prep') return 'interview-prep';
   return 'home';
 }
 
 export function getPathnameForTab(tab: ActiveTab): string {
   if (tab === 'login') return '/login';
   if (tab === 'signup') return '/signup';
+  if (tab === 'interview-prep') return '/interview-prep';
   return '/';
 }

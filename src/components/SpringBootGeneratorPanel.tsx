@@ -97,6 +97,23 @@ const API_TEST_PRESETS: ApiTestPreset[] = [
       type: 'Full-Time',
       ctc: '11.5 LPA'
     }
+  },
+  {
+    id: 'post-signup',
+    method: 'POST',
+    path: '/api/auth/signup',
+    label: 'Auth SignUp (@Valid @Email)',
+    hibernateSql:
+      'Jakarta Bean Validation (@NotBlank, @Email, @Size) -> Hibernate: insert into users (name, email, provider, headline, location) values (?, ?, ?, ?, ?)',
+    body: {
+      name: 'Ananya Krishnan',
+      email: 'ananya.krishnan@jobnova.dev',
+      password: 'SpringBoot2026',
+      confirmPassword: 'SpringBoot2026',
+      trackId: 'java-fullstack',
+      location: 'Bengaluru, India',
+      acceptTerms: true
+    }
   }
 ];
 
@@ -413,7 +430,13 @@ export const SpringBootGeneratorPanel: React.FC<SpringBootGeneratorPanelProps> =
               key={preset.id}
               type="button"
               data-testid={`sb-api-preset-${preset.id}`}
-              onClick={() => setSelectedPresetId(preset.id)}
+              onClick={() => {
+                setSelectedPresetId(preset.id);
+                setBodyValidationError(null);
+                if (preset.method === 'POST' && preset.body) {
+                  setCustomPostBody(JSON.stringify(preset.body, null, 2));
+                }
+              }}
               className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-colors cursor-pointer ${
                 selectedPresetId === preset.id
                   ? 'bg-indigo-50 dark:bg-indigo-950/60 border-indigo-400 dark:border-indigo-700 text-indigo-800 dark:text-indigo-200 font-semibold'

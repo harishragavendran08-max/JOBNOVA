@@ -190,11 +190,12 @@ test('evaluateFullStackChallenge grades code against solution keywords accuratel
   assert.ok(resultFail.missingKeywords.length > 0);
 });
 
-test('SPRING_BOOT_ANNOTATION_GUIDE covers all 5 core Spring Boot architectural annotations', () => {
-  assert.equal(SPRING_BOOT_ANNOTATION_GUIDE.length, 5);
+test('SPRING_BOOT_ANNOTATION_GUIDE covers all 6 core Spring Boot & Bean Validation architectural annotations', () => {
+  assert.equal(SPRING_BOOT_ANNOTATION_GUIDE.length, 6);
   const names = SPRING_BOOT_ANNOTATION_GUIDE.map((a) => a.name);
   assert.ok(names.includes('@SpringBootApplication'));
   assert.ok(names.includes('@RestController'));
+  assert.ok(names.includes('@Valid · @NotBlank · @Email'));
   assert.ok(names.includes('@Transactional'));
   assert.ok(names.includes('@Repository'));
   assert.ok(names.includes('@CrossOrigin'));

@@ -162,6 +162,56 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
   const [newWorkDescription, setNewWorkDescription] = useState('');
   const [newWorkSkills, setNewWorkSkills] = useState('');
 
+  // Multi-Page iOS Profile Sub-Navigation ('about' | 'education' | 'resume' | 'skills' | 'all')
+  const [activeProfilePage, setActiveProfilePage] = useState<
+    'about' | 'education' | 'resume' | 'skills' | 'all'
+  >('about');
+
+  // Structured Education Qualifications state
+  const [educationRecords, setEducationRecords] = useState<
+    {
+      id: string;
+      degree: string;
+      institution: string;
+      timeline: string;
+      cgpa: string;
+      coursework: string[];
+      honors: string;
+    }[]
+  >([
+    {
+      id: 'edu-ug-1',
+      degree: 'B.E. in Computer Science & Engineering',
+      institution: 'Anna University · College of Engineering, Guindy (Chennai)',
+      timeline: '2021 – 2025',
+      cgpa: '8.9 / 10.0 CGPA (First Class with Distinction)',
+      coursework: [
+        'Data Structures & Algorithms',
+        'Database Management Systems (MySQL)',
+        'Operating Systems',
+        'Distributed Systems',
+        'Object-Oriented Programming (Java)'
+      ],
+      honors: 'Smart India Hackathon Finalist · ACM Student Chapter Technical Lead'
+    },
+    {
+      id: 'edu-hsc-2',
+      degree: 'Higher Secondary Certificate (Class XII · Computer Science & Mathematics)',
+      institution: 'DAV Senior Secondary School, Chennai',
+      timeline: '2019 – 2021',
+      cgpa: '94.6% Aggregate (Centum in Computer Science)',
+      coursework: ['Mathematics', 'Physics', 'Chemistry', 'Python & SQL Fundamentals'],
+      honors: 'School Topper in Computer Science'
+    }
+  ]);
+  const [showAddEduModal, setShowAddEduModal] = useState(false);
+  const [newEduDegree, setNewEduDegree] = useState('');
+  const [newEduInstitution, setNewEduInstitution] = useState('');
+  const [newEduTimeline, setNewEduTimeline] = useState('2022 – 2026');
+  const [newEduCgpa, setNewEduCgpa] = useState('8.8 / 10.0 CGPA');
+  const [newEduCoursework, setNewEduCoursework] = useState('DSA, DBMS, Operating Systems, Computer Networks');
+  const [newEduHonors, setNewEduHonors] = useState('');
+
   // Keep form fields synchronized whenever the user object updates from backend or OAuth
   useEffect(() => {
     if (user) {
@@ -261,19 +311,137 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
     }
   };
 
+  const handleAiPolishAboutBio = () => {
+    const nextHeadline =
+      'Full-Stack Software Engineer | Java 17 · Spring Boot 3 · React.js · MySQL | Cloud & Microservices';
+    const nextBio =
+      'Results-driven Computer Science Engineer specializing in high-throughput Java & Spring Boot microservices and responsive React.js web applications. Experienced in designing RESTful APIs, optimizing MySQL/InnoDB queries, and deploying containerized services on AWS. Passionate about clean architecture, distributed systems, and shipping user-centric software.';
+    setHeadlineInput(nextHeadline);
+    setSummaryInput(nextBio);
+    onUpdateProfile({
+      id: user?.id || 1,
+      oauthId: user?.oauthId || 'google-oauth2-student-101',
+      name: nameInput.trim() || 'Harish Ragavendran',
+      email: emailInput.trim() || 'harishragavendran56@gmail.com',
+      provider: user?.provider || 'Google',
+      headline: nextHeadline,
+      location: locationInput.trim() || 'Chennai, India',
+      summary: nextBio,
+      education: educationInput.trim(),
+      skills: activeUserSkills,
+      skillProficiencies,
+      dob: user?.dob || 'Not provided by OAuth provider',
+      linkedInConnected: user?.linkedInConnected,
+      linkedInProfileUrl: user?.linkedInProfileUrl,
+      workHistory,
+      lastLinkedInSync: user?.lastLinkedInSync
+    });
+    const msg = 'AI Assistant generated and applied your professional About Bio & Headline!';
+    setSavedBanner(msg);
+    if (onNotify) onNotify(msg);
+  };
+
+  const handleAiFormatEducation = () => {
+    const formattedEdu =
+      'B.E. in Computer Science & Engineering · Anna University, Chennai (2021–2025) · CGPA: 8.9/10 · Coursework: Data Structures & Algorithms, DBMS, Operating Systems & Distributed Systems';
+    setEducationInput(formattedEdu);
+    onUpdateProfile({
+      id: user?.id || 1,
+      oauthId: user?.oauthId || 'google-oauth2-student-101',
+      name: nameInput.trim() || 'Harish Ragavendran',
+      email: emailInput.trim() || 'harishragavendran56@gmail.com',
+      provider: user?.provider || 'Google',
+      headline: headlineInput.trim(),
+      location: locationInput.trim(),
+      summary: summaryInput.trim(),
+      education: formattedEdu,
+      skills: activeUserSkills,
+      skillProficiencies,
+      dob: user?.dob || 'Not provided by OAuth provider',
+      linkedInConnected: user?.linkedInConnected,
+      linkedInProfileUrl: user?.linkedInProfileUrl,
+      workHistory,
+      lastLinkedInSync: user?.lastLinkedInSync
+    });
+    const msg = 'AI Assistant formatted your Education record with CGPA (8.9/10) and Core CS Coursework!';
+    setSavedBanner(msg);
+    if (onNotify) onNotify(msg);
+  };
+
+  const handleAddEducationRecord = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEduDegree.trim() || !newEduInstitution.trim()) return;
+    const courseworkList = newEduCoursework
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean);
+    const created = {
+      id: `edu-${Date.now()}`,
+      degree: newEduDegree.trim(),
+      institution: newEduInstitution.trim(),
+      timeline: newEduTimeline.trim() || '2022 – 2026',
+      cgpa: newEduCgpa.trim() || '8.8 / 10.0 CGPA',
+      coursework: courseworkList.length > 0 ? courseworkList : ['DSA', 'DBMS', 'Operating Systems'],
+      honors: newEduHonors.trim() || 'First Class with Distinction'
+    };
+    const nextRecords = [created, ...educationRecords];
+    setEducationRecords(nextRecords);
+    const summaryLine = `${created.degree} · ${created.institution} (${created.timeline}) · CGPA: ${created.cgpa} · Coursework: ${created.coursework.join(', ')}`;
+    setEducationInput(summaryLine);
+    onUpdateProfile({
+      id: user?.id || 1,
+      oauthId: user?.oauthId || 'google-oauth2-student-101',
+      name: nameInput.trim() || 'Harish Ragavendran',
+      email: emailInput.trim() || 'harishragavendran56@gmail.com',
+      provider: user?.provider || 'Google',
+      headline: headlineInput.trim(),
+      location: locationInput.trim(),
+      summary: summaryInput.trim(),
+      education: summaryLine,
+      skills: activeUserSkills,
+      skillProficiencies,
+      dob: user?.dob || 'Not provided by OAuth provider',
+      linkedInConnected: user?.linkedInConnected,
+      linkedInProfileUrl: user?.linkedInProfileUrl,
+      workHistory,
+      lastLinkedInSync: user?.lastLinkedInSync
+    });
+    setNewEduDegree('');
+    setNewEduInstitution('');
+    setNewEduHonors('');
+    setShowAddEduModal(false);
+    const msg = `Added "${created.degree}" at ${created.institution} to your Education credentials.`;
+    setSavedBanner(msg);
+    if (onNotify) onNotify(msg);
+  };
+
+  const handleDeleteEducationRecord = (id: string) => {
+    setEducationRecords((prev) => prev.filter((item) => item.id !== id));
+    setSavedBanner('Education qualification entry removed.');
+  };
+
   const handleJumpToProfileSection = (sectionKey: 'workHistory' | 'skills' | 'education') => {
     if (sectionKey === 'workHistory') {
-      document
-        .querySelector('[data-testid="profile-work-history-section"]')
-        ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setActiveProfilePage('resume');
+      setTimeout(() => {
+        document
+          .querySelector('[data-testid="profile-work-history-section"]')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 60);
     } else if (sectionKey === 'skills') {
-      const el = document.getElementById('profile-skills-input') as HTMLInputElement | null;
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el?.focus();
+      setActiveProfilePage('about');
+      setTimeout(() => {
+        const el = document.getElementById('profile-skills-input') as HTMLInputElement | null;
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el?.focus();
+      }, 60);
     } else if (sectionKey === 'education') {
-      const el = document.getElementById('profile-education-input') as HTMLInputElement | null;
-      el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el?.focus();
+      setActiveProfilePage('education');
+      setTimeout(() => {
+        const el = document.getElementById('profile-education-input') as HTMLInputElement | null;
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el?.focus();
+      }, 60);
     }
   };
 
@@ -707,12 +875,390 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 ios-page-enter">
+      {/* iOS Profile Creation & Portfolio Hub Header + Segmented Sub-Navigation */}
+      <section
+        aria-label="Profile Creation and Portfolio Hub"
+        data-testid="profile-creation-hub"
+        className="ios-card bg-white/95 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 space-y-5"
+      >
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-[#007AFF] text-white flex items-center justify-center text-xl font-extrabold shadow-sm shrink-0">
+              {nameInput ? nameInput.slice(0, 2).toUpperCase() : 'HR'}
+            </div>
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-wider text-[#007AFF] dark:text-[#3898FF]">
+                  iOS Profile Studio · Portfolio &amp; Credentials
+                </span>
+                <span className="px-2.5 py-0.5 text-[11px] font-mono font-bold rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                  {profileCompletion.percentage}% Profile Ready
+                </span>
+              </div>
+              <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
+                {nameInput || 'Create Your Student Profile'}
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-400">
+                {headlineInput || 'Full-Stack Software Engineer · Java, Spring Boot & React'} ·{' '}
+                <span className="font-medium text-slate-800 dark:text-slate-200">
+                  {locationInput || 'Chennai, India'}
+                </span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+            <button
+              type="button"
+              data-testid="profile-hub-ai-assistant-btn"
+              onClick={handleFinishProfileClick}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#007AFF] hover:bg-[#0062CC] rounded-full shadow-xs transition-all cursor-pointer"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>AI Profile Coach</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleExportPdfResume}
+              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-[#F2F2F7] dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 rounded-full transition-all cursor-pointer"
+            >
+              <FileDown className="w-3.5 h-3.5 text-[#007AFF] dark:text-[#3898FF]" />
+              <span>Export PDF Resume</span>
+            </button>
+          </div>
+        </div>
+
+        {/* iOS Segmented Sub-Navigation Bar for Profile Pages */}
+        <div className="pt-4 border-t border-slate-200/70 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div
+            role="tablist"
+            aria-label="Profile Sections Navigation"
+            data-testid="profile-subnav"
+            className="flex flex-wrap items-center gap-1 ios-segmented"
+          >
+            {[
+              { id: 'about', label: 'About & Profile Creation', icon: UserCheck },
+              { id: 'education', label: 'Education & Academics', icon: GraduationCap },
+              { id: 'resume', label: 'Resume & Experience', icon: FileText },
+              { id: 'skills', label: 'Skills & Settings', icon: SlidersHorizontal },
+              { id: 'all', label: 'All Sections', icon: Sparkles }
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeProfilePage === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  data-testid={`profile-tab-${tab.id}`}
+                  onClick={() =>
+                    setActiveProfilePage(
+                      tab.id as 'about' | 'education' | 'resume' | 'skills' | 'all'
+                    )
+                  }
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl transition-all cursor-pointer ${
+                    isActive
+                      ? 'bg-white dark:bg-slate-900 text-[#007AFF] dark:text-[#3898FF] shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span>{tab.label}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+            {educationRecords.length} Degrees · {workHistory.length} Roles · {activeUserSkills.length} Skills
+          </span>
+        </div>
+
+        {savedBanner && (
+          <div
+            role="status"
+            data-testid="profile-hub-saved-banner"
+            className="flex items-center justify-between gap-2 px-4 py-2.5 text-xs font-medium text-emerald-800 dark:text-emerald-200 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 rounded-xl"
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+              <span>{savedBanner}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSavedBanner(null)}
+              className="text-emerald-700 dark:text-emerald-300 hover:underline text-[11px] font-semibold cursor-pointer"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+      </section>
+
+      {/* ==================== PAGE 2: DEDICATED EDUCATION & ACADEMIC CREDENTIALS STUDIO ==================== */}
+      <section
+        aria-label="Education and Academic Credentials"
+        data-testid="profile-page-education"
+        className={
+          activeProfilePage === 'education' || activeProfilePage === 'all'
+            ? 'space-y-6'
+            : 'hidden'
+        }
+      >
+        <div className="ios-card bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 space-y-6">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-slate-200/80 dark:border-slate-800">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs font-semibold text-[#007AFF] dark:text-[#3898FF]">
+                <GraduationCap className="w-4 h-4" />
+                <span>Education &amp; Academic Credentials · University, CGPA &amp; Coursework</span>
+              </div>
+              <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
+                Academic Qualifications &amp; University Coursework ({educationRecords.length})
+              </h2>
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                Add your university degrees, graduation years, CGPA / percentage, and core Computer Science coursework for recruiter ATS matching.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+              <button
+                type="button"
+                data-testid="ai-format-education-btn"
+                onClick={handleAiFormatEducation}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[#007AFF] dark:text-[#3898FF] bg-blue-50/80 dark:bg-blue-950/50 hover:bg-blue-100/80 border border-blue-200 dark:border-blue-800 rounded-xl transition-colors cursor-pointer"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>AI Format Education</span>
+              </button>
+              <button
+                type="button"
+                data-testid="add-education-btn"
+                onClick={() => setShowAddEduModal((prev) => !prev)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#007AFF] hover:bg-[#0062CC] rounded-xl transition-colors cursor-pointer"
+              >
+                <PlusCircle className="w-3.5 h-3.5" />
+                <span>{showAddEduModal ? 'Close Form' : 'Add Education'}</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Add Education Qualification Form */}
+          {showAddEduModal && (
+            <form
+              onSubmit={handleAddEducationRecord}
+              data-testid="add-education-form"
+              className="p-5 rounded-2xl bg-[#F2F2F7]/80 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
+                  Add New Academic Degree / Qualification
+                </h3>
+                <button
+                  type="button"
+                  onClick={() => setShowAddEduModal(false)}
+                  className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Degree / Program *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. M.Tech in Computer Science / B.Tech IT"
+                    value={newEduDegree}
+                    onChange={(e) => setNewEduDegree(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    University / Institution *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. IIT Madras / Anna University, Chennai"
+                    value={newEduInstitution}
+                    onChange={(e) => setNewEduInstitution(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Graduation Timeline
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 2021 – 2025"
+                    value={newEduTimeline}
+                    onChange={(e) => setNewEduTimeline(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    CGPA / Percentage
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. 8.9 / 10.0 CGPA"
+                    value={newEduCgpa}
+                    onChange={(e) => setNewEduCgpa(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    Academic Honors / Leadership
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Dean's List, Hackathon Winner"
+                    value={newEduHonors}
+                    onChange={(e) => setNewEduHonors(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  Core Engineering Coursework (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Data Structures & Algorithms, DBMS, Operating Systems, Computer Networks"
+                  value={newEduCoursework}
+                  onChange={(e) => setNewEduCoursework(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowAddEduModal(false)}
+                  className="px-3.5 py-1.5 text-xs font-semibold text-slate-600 dark:text-slate-400 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 text-xs font-semibold text-white bg-[#007AFF] hover:bg-[#0062CC] rounded-xl cursor-pointer"
+                >
+                  Save Qualification
+                </button>
+              </div>
+            </form>
+          )}
+
+          {/* Structured Education Qualification Cards */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {educationRecords.map((edu, idx) => (
+              <article
+                key={edu.id}
+                data-testid={`education-record-card-${idx}`}
+                className="p-5 rounded-2xl bg-[#F2F2F7]/70 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between space-y-4"
+              >
+                <div className="space-y-2.5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 text-[11px] font-mono font-bold rounded-md bg-blue-50 dark:bg-blue-950/70 text-[#007AFF] dark:text-blue-300 border border-blue-200 dark:border-blue-800">
+                        {edu.timeline}
+                      </span>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 mt-1.5">
+                        {edu.degree}
+                      </h3>
+                      <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mt-0.5">
+                        {edu.institution}
+                      </p>
+                    </div>
+                    {educationRecords.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteEducationRecord(edu.id)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 rounded-lg cursor-pointer"
+                        title="Remove education record"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-mono font-semibold">
+                      {edu.cgpa}
+                    </span>
+                    {edu.honors && (
+                      <span className="px-2.5 py-1 rounded-lg bg-amber-50 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-800 font-medium">
+                        {edu.honors}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5 pt-1">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Core Engineering Coursework
+                    </div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {edu.coursework.map((course) => (
+                        <span
+                          key={course}
+                          className="px-2.5 py-0.5 text-[11px] font-medium rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300"
+                        >
+                          {course}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          {/* Tracked Certifications & Enrolled Courses Summary */}
+          <div className="pt-4 border-t border-slate-200/80 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="space-y-0.5">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                Tracked Certifications ({resumePreviewData.trackedCertifications.length}) &amp; Enrolled Courses ({resumePreviewData.enrolledCourses.length})
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Automatically synced into your Education &amp; Credentials section on exported A4 PDF resumes.
+              </p>
+            </div>
+            {onNavigateToLearning && (
+              <button
+                type="button"
+                onClick={() => onNavigateToLearning()}
+                className="px-4 py-2 text-xs font-semibold text-[#007AFF] dark:text-[#3898FF] bg-[#F2F2F7] dark:bg-slate-800 hover:bg-slate-200/70 rounded-xl transition-colors cursor-pointer shrink-0"
+              >
+                Browse Courses &amp; Certifications →
+              </button>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* Top Section: Formatted PDF Resume Builder & Live Preview */}
       <section
         aria-label="Formatted PDF Resume Builder and Exporter"
         data-testid="pdf-resume-exporter"
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6"
+        className={
+          activeProfilePage === 'resume' || activeProfilePage === 'all'
+            ? 'ios-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6'
+            : 'hidden'
+        }
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-slate-200 dark:border-slate-800">
           <div className="space-y-1">
@@ -1035,7 +1581,11 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
       <section
         aria-label="Resume Health Score"
         data-testid="resume-health-score-widget"
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-6"
+        className={
+          activeProfilePage === 'resume' || activeProfilePage === 'all'
+            ? 'ios-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-6'
+            : 'hidden'
+        }
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-slate-200 dark:border-slate-800">
           <div className="space-y-1">
@@ -1248,7 +1798,11 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
       <section
         aria-label="Skill Proficiency Tracker"
         data-testid="profile-skill-proficiency-tracker"
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-6"
+        className={
+          activeProfilePage === 'skills' || activeProfilePage === 'all'
+            ? 'ios-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-6'
+            : 'hidden'
+        }
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-slate-200 dark:border-slate-800">
           <div className="space-y-1">
@@ -1458,7 +2012,11 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
       <section
         aria-label="Skill Gap Analysis"
         data-testid="profile-skill-gap-analysis"
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-6"
+        className={
+          activeProfilePage === 'skills' || activeProfilePage === 'all'
+            ? 'ios-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-6'
+            : 'hidden'
+        }
       >
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-5 border-b border-slate-200 dark:border-slate-800">
           <div className="space-y-1">
@@ -1664,11 +2222,115 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
         </div>
       </section>
 
-      {/* Bottom 2-Column Split: Profile Editor (Left) & Account Settings (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Column: Profile Card & OAuth Session + Editor */}
-        <div className="lg:col-span-5 space-y-6">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-6">
+      {/* ==================== PAGE 1 RIGHT/TOP SUMMARY: ABOUT LIVE PREVIEW & PROFILE COMPLETION ==================== */}
+      <section
+        aria-label="About Preview and Profile Completion"
+        className={
+          activeProfilePage === 'about' || activeProfilePage === 'all'
+            ? 'grid grid-cols-1 lg:grid-cols-12 gap-6'
+            : 'hidden'
+        }
+      >
+        {/* Left 7 Cols: Live Recruiter About Card Preview */}
+        <div className="lg:col-span-7 ios-card bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 flex flex-col justify-between space-y-4">
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wider text-[#007AFF] dark:text-[#3898FF]">
+                About Information · Recruiter Preview
+              </span>
+              <span className="text-[11px] font-mono text-slate-500 dark:text-slate-400">
+                {emailInput}
+              </span>
+            </div>
+            <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+              {summaryInput ||
+                'Write your engineering bio summary below or click "AI Polish Bio & Headline" to craft a recruiter-ready About section.'}
+            </p>
+          </div>
+
+          <div className="pt-3 border-t border-slate-200/70 dark:border-slate-800 flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 mr-1">
+              Core Skills:
+            </span>
+            {activeUserSkills.map((sk) => (
+              <span
+                key={sk}
+                className="px-2.5 py-0.5 text-[11px] font-mono font-medium rounded-full bg-[#F2F2F7] dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700"
+              >
+                #{sk}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Right 5 Cols: Profile Completion Progress Card */}
+        <div className="lg:col-span-5 ios-card bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-6 flex flex-col justify-between space-y-4">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                Profile Readiness
+              </div>
+              <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {profileCompletion.statusMessage}
+              </div>
+            </div>
+            <span className="px-2.5 py-1 text-xs font-mono font-bold rounded-full bg-blue-50 dark:bg-blue-950/60 text-[#007AFF] dark:text-[#3898FF] border border-blue-200 dark:border-blue-800 tabular-nums">
+              {profileCompletion.percentage}%
+            </span>
+          </div>
+
+          <div className="w-full h-2.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-[#007AFF] transition-all duration-500"
+              style={{ width: `${profileCompletion.percentage}%` }}
+            />
+          </div>
+
+          <div className="grid grid-cols-3 gap-2">
+            {profileCompletion.sections.map((section) => (
+              <button
+                key={`about-sec-${section.key}`}
+                type="button"
+                onClick={() => handleJumpToProfileSection(section.key)}
+                className="p-2.5 rounded-xl bg-[#F2F2F7]/80 dark:bg-slate-800/70 hover:bg-blue-50/70 dark:hover:bg-slate-800 border border-slate-200/70 dark:border-slate-700 text-left transition-colors cursor-pointer"
+              >
+                <div className="text-[11px] font-bold text-slate-900 dark:text-slate-100 truncate">
+                  {section.label}
+                </div>
+                <div className="text-[11px] font-mono text-[#007AFF] dark:text-[#3898FF] mt-0.5">
+                  {section.earnedPoints}/{section.maxPoints}%
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Bottom 2-Column Split: Profile Editor / Work History (Left) & Account Settings (Right) */}
+      <div
+        className={
+          activeProfilePage === 'education'
+            ? 'hidden'
+            : 'grid grid-cols-1 lg:grid-cols-12 gap-8'
+        }
+      >
+        {/* Left Column: Profile Card & OAuth Session + Editor + Work Experience */}
+        <div
+          className={
+            activeProfilePage === 'about' || activeProfilePage === 'resume'
+              ? 'lg:col-span-12 flex flex-col gap-6'
+              : activeProfilePage === 'skills'
+              ? 'hidden'
+              : 'lg:col-span-5 flex flex-col gap-6'
+          }
+        >
+          <div
+            className={
+              activeProfilePage === 'about' || activeProfilePage === 'all'
+                ? 'order-2 ios-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-6'
+                : 'hidden'
+            }
+          >
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="w-14 h-14 rounded-full bg-indigo-600 text-white flex items-center justify-center text-lg font-bold shrink-0">
@@ -1917,16 +2579,26 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
             </div>
           </div>
 
-          {/* Edit Profile Form */}
+          {/* Edit Profile Form — shown on About & All pages */}
           <form
             onSubmit={handleSaveProfile}
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-4"
+            data-testid="profile-about-creation-form"
+            className={
+              activeProfilePage === 'about' || activeProfilePage === 'all'
+                ? 'order-1 ios-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4'
+                : 'hidden'
+            }
           >
-            <div className="flex items-center gap-2">
-              <UserCheck className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                Update Student Profile &amp; Skills
-              </h3>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <UserCheck className="w-4 h-4 text-[#007AFF] dark:text-[#3898FF] shrink-0" />
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                  Create &amp; Update Profile · About Information
+                </h3>
+              </div>
+              <span className="text-[11px] font-mono font-semibold text-[#007AFF] dark:text-[#3898FF] whitespace-nowrap shrink-0">
+                Step 1 · About &amp; Bio
+              </span>
             </div>
 
             {validationError && (
@@ -1989,21 +2661,33 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
                   <label htmlFor="profile-summary-input" className="block text-xs font-medium text-slate-700 dark:text-slate-300">
-                    Professional Summary
+                    About / Professional Bio Summary
                   </label>
-                  <button
-                    type="button"
-                    data-testid="sync-linkedin-summary-btn"
-                    onClick={handleSyncFromLinkedIn}
-                    disabled={isSyncingLinkedIn}
-                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0A66C2] hover:underline cursor-pointer disabled:opacity-60 whitespace-nowrap"
-                    title="Sync summary, work history, skills, and education from LinkedIn"
-                  >
-                    <RefreshCw className={`w-3 h-3 ${isSyncingLinkedIn ? 'animate-spin' : ''}`} />
-                    <span>{isSyncingLinkedIn ? 'Syncing...' : 'Sync full profile'}</span>
-                  </button>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      data-testid="ai-polish-bio-btn"
+                      onClick={handleAiPolishAboutBio}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#007AFF] dark:text-[#3898FF] hover:underline cursor-pointer whitespace-nowrap"
+                      title="Generate a recruiter-ready About bio and headline with AI"
+                    >
+                      <Sparkles className="w-3 h-3" />
+                      <span>AI Polish Bio &amp; Headline</span>
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="sync-linkedin-summary-btn"
+                      onClick={handleSyncFromLinkedIn}
+                      disabled={isSyncingLinkedIn}
+                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#0A66C2] hover:underline cursor-pointer disabled:opacity-60 whitespace-nowrap"
+                      title="Sync summary, work history, skills, and education from LinkedIn"
+                    >
+                      <RefreshCw className={`w-3 h-3 ${isSyncingLinkedIn ? 'animate-spin' : ''}`} />
+                      <span>{isSyncingLinkedIn ? 'Syncing...' : 'Sync full profile'}</span>
+                    </button>
+                  </div>
                 </div>
                 <textarea
                   id="profile-summary-input"
@@ -2062,11 +2746,15 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
             </div>
           </form>
 
-          {/* Work Experience & LinkedIn History Section */}
+          {/* Work Experience & LinkedIn History Section — shown on Resume & Experience and All pages */}
           <section
             aria-label="Work Experience & LinkedIn History"
             data-testid="profile-work-history-section"
-            className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-4"
+            className={
+              activeProfilePage === 'resume' || activeProfilePage === 'all'
+                ? 'order-3 ios-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-4'
+                : 'hidden'
+            }
           >
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
               <div className="space-y-0.5">
@@ -2381,9 +3069,17 @@ export const ProfileSettingsView: React.FC<ProfileSettingsViewProps> = ({
           </section>
         </div>
 
-        {/* Right Column: Account Settings */}
-        <div className="lg:col-span-7 space-y-6">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 space-y-6">
+        {/* Right Column: Account Settings — shown on Skills & Settings and All pages */}
+        <div
+          className={
+            activeProfilePage === 'skills'
+              ? 'lg:col-span-12 space-y-6'
+              : activeProfilePage === 'all'
+              ? 'lg:col-span-7 space-y-6'
+              : 'hidden'
+          }
+        >
+          <div className="ios-card bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 space-y-6">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">

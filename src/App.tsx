@@ -63,8 +63,7 @@ import {
   syncApplicationStageRecords,
   toggleItemSelection,
   toggleThemeSetting,
-  updateApplicationStageRecord,
-  updateInterviewScheduleRecord
+  updateApplicationStageRecord
 } from './utils/jobnovaLogic';
 import {
   computeJobMatchBreakdown,
@@ -75,16 +74,13 @@ import {
 import { ActiveTab, Navbar } from './components/Navbar';
 import { CareerAssistantView } from './components/CareerAssistantView';
 import { ProfileSettingsView } from './components/ProfileSettingsView';
-import { SkillProficiencyRadarCard } from './components/SkillProficiencyRadarCard';
-import { JobSalaryComparisonCard } from './components/JobSalaryComparisonCard';
-import { CareerTimelineCard } from './components/CareerTimelineCard';
-import { PersonalizedAlertsCard } from './components/PersonalizedAlertsCard';
 import { FullStackCodeLabView } from './components/FullStackCodeLabView';
 import { ResumeBuilderView } from './components/ResumeBuilderView';
 import { LoginView } from './components/LoginView';
 import { SignUpView } from './components/SignUpView';
 import { UserAlertsPanel } from './components/UserAlertsPanel';
 import { QuickInterviewTipsModal } from './components/QuickInterviewTipsModal';
+import { InterviewPrepView } from './components/InterviewPrepView';
 import { generateQuickInterviewTips } from './utils/quickInterviewTipsLogic';
 import { getPathnameForTab, resolveTabFromPathname } from './utils/authLogic';
 import {
@@ -211,8 +207,32 @@ export default function App() {
         'Shortlisted for Technical & System Design Interview Round 1 at TCS.',
       timestamp: 'Nov 12, 2026'
     });
-    return addInterviewFeedbackRecord({
+    const roundOneSeed = addInterviewFeedbackRecord({
       existingRecords: interviewing,
+      job: SEED_JOBS[0],
+      roundTitle: 'Mock Diagnostic: Core Java Concurrency & SQL Joins · TCS',
+      interviewerOrFormat: 'Peer Practice · 40m Timed Drill',
+      questionsAsked:
+        'Java Volatile vs Synchronized memory barriers, MySQL composite index selectivity, and Spring Bean lifecycle scopes',
+      keyTakeaways:
+        'Needed sharper explanation of MySQL covering index execution plans and Java ForkJoinPool work-stealing.',
+      confidenceRating: 'Needs Review',
+      timestamp: 'Nov 4, 2026'
+    });
+    const roundTwoSeed = addInterviewFeedbackRecord({
+      existingRecords: roundOneSeed,
+      job: SEED_JOBS[0],
+      roundTitle: 'Round 0: Spring Boot REST & Bean Validation Screening · TCS',
+      interviewerOrFormat: 'Technical Lead · 45m Architecture Screen',
+      questionsAsked:
+        'Spring Boot @Valid and @NotBlank exception handling, React state reconciliation, and REST API idempotency',
+      keyTakeaways:
+        'Solid walkthrough of ControllerAdvice MethodArgumentNotValidException; practice connection pool tuning under peak load.',
+      confidenceRating: 'Moderate',
+      timestamp: 'Nov 8, 2026'
+    });
+    return addInterviewFeedbackRecord({
+      existingRecords: roundTwoSeed,
       job: SEED_JOBS[0],
       roundTitle: 'Round 1: Java & Spring Boot Technical Screening · TCS',
       interviewerOrFormat: 'Senior Backend Architect · 45m Live Coding',
@@ -597,26 +617,6 @@ export default function App() {
     );
   };
 
-  const handleUpdateInterviewSchedule = (
-    jobId: number,
-    nextScheduledIso: string,
-    nextRoundTitle: string
-  ) => {
-    const targetJob = jobs.find((j) => j.id === jobId);
-    if (!targetJob) return;
-    setApplicationStageRecords((prev) =>
-      updateInterviewScheduleRecord({
-        existingRecords: prev,
-        job: targetJob,
-        interviewScheduledAt: nextScheduledIso,
-        interviewRoundTitle: nextRoundTitle
-      })
-    );
-    showToast(
-      `Scheduled "${nextRoundTitle}" for ${targetJob.title} at ${targetJob.company}.`
-    );
-  };
-
   const handleAddInterviewFeedback = (params: {
     jobId: number;
     roundTitle: string;
@@ -624,9 +624,13 @@ export default function App() {
     questionsAsked: string;
     keyTakeaways: string;
     confidenceRating: InterviewConfidenceRating;
+    timestamp?: string;
   }) => {
     const targetJob = jobs.find((j) => j.id === params.jobId);
     if (!targetJob) return;
+    if (!appliedJobIds.includes(targetJob.id)) {
+      setAppliedJobIds((prev) => (prev.includes(targetJob.id) ? prev : [...prev, targetJob.id]));
+    }
     setApplicationStageRecords((prev) =>
       addInterviewFeedbackRecord({
         existingRecords: prev,
@@ -636,7 +640,7 @@ export default function App() {
         questionsAsked: params.questionsAsked,
         keyTakeaways: params.keyTakeaways,
         confidenceRating: params.confidenceRating,
-        timestamp: 'Just now · Nov 12, 2026'
+        timestamp: params.timestamp?.trim() || 'Nov 15, 2026'
       })
     );
     showToast(
@@ -866,18 +870,19 @@ export default function App() {
   const jobLocations = ['ALL', 'Bengaluru', 'Chennai', 'Hyderabad', 'Pune', 'Mumbai', 'Noida', 'Remote'];
   const coreStackFilters = [
     { label: 'All Stack', value: '' },
-    { label: 'Python', value: 'python' },
-    { label: 'GenAI / LLM', value: 'genai' },
+    { label: 'iOS / Swift', value: 'swift' },
     { label: 'Java', value: 'java' },
     { label: 'Spring Boot', value: 'springboot' },
+    { label: 'React.js', value: 'react' },
+    { label: 'Python', value: 'python' },
+    { label: 'GenAI / LLM', value: 'genai' },
     { label: 'Golang', value: 'golang' },
     { label: 'Rust', value: 'rust' },
-    { label: 'React.js', value: 'react' },
     { label: 'TypeScript', value: 'typescript' },
     { label: 'AWS Cloud', value: 'aws' },
     { label: 'Kubernetes', value: 'kubernetes' },
     { label: 'Data / Spark', value: 'spark' },
-    { label: 'SQL / Postgres', value: 'sql' },
+    { label: 'SQL / MySQL', value: 'sql' },
     { label: 'QA / Automation', value: 'testing' },
     { label: 'Cybersecurity', value: 'cybersecurity' }
   ];
@@ -968,7 +973,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col overflow-x-clip bg-[#f5f6f8] dark:bg-slate-950 text-slate-900 dark:text-slate-100 theme-transition-surface transition-colors duration-200">
+    <div className="min-h-screen flex flex-col overflow-x-clip bg-[#F2F2F7] dark:bg-[#090D16] text-slate-900 dark:text-slate-100 theme-transition-surface">
       <Navbar
         activeTab={activeTab}
         onSelectTab={navigateToTab}
@@ -978,10 +983,10 @@ export default function App() {
         onToggleTheme={handleToggleTheme}
       />
 
-      {/* Toast Notification Banner */}
+      {/* iOS Dynamic Island-style Toast Notification Banner */}
       {toastMessage && (
-        <div className="no-print fixed bottom-5 left-4 right-4 sm:left-auto sm:right-5 z-50 flex items-center justify-between gap-3 px-4 py-3 rounded-lg bg-slate-900 dark:bg-slate-800 text-white shadow-lg border border-slate-700 text-sm sm:max-w-md">
-          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+        <div className="no-print fixed bottom-6 left-4 right-4 sm:left-auto sm:right-6 z-50 flex items-center justify-between gap-3 px-4 py-3 rounded-2xl ios-glass-bar bg-slate-900/90 dark:bg-slate-800/92 text-white shadow-xl border border-slate-700/70 text-sm sm:max-w-md ios-page-enter">
+          <CheckCircle2 className="w-4 h-4 text-[#34C759] shrink-0" />
           <span>{toastMessage}</span>
           <button
             type="button"
@@ -994,53 +999,63 @@ export default function App() {
         </div>
       )}
 
-      <main className="flex-1 min-w-0 max-w-7xl w-full mx-auto px-4 sm:px-6 py-8">
+      <main className="flex-1 min-w-0 max-w-7xl w-full mx-auto px-4 sm:px-6 pt-8 pb-20">
         {/* ==================== 1. HOME / OVERVIEW MARKETPLACE VIEW ==================== */}
         {activeTab === 'home' && (
-          <div className="space-y-8">
-            {/* Indeed / Glassdoor Unified Career Search Hero */}
-            <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 sm:p-8 space-y-6">
+          <div className="space-y-8 ios-page-enter">
+            {/* iOS Styled Unified Career Search Hero */}
+            <section className="ios-card bg-white/95 dark:bg-[#151822]/95 border border-slate-200/80 dark:border-slate-800/90 p-6 sm:p-8 space-y-6">
               <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
                 <div className="space-y-2 max-w-3xl">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-[#2557A7] dark:text-blue-400">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-[#007AFF] dark:text-[#3898FF]">
                     JobNova Career &amp; Compensation Marketplace · India Engineering Roles
                   </p>
                   <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-100">
                     Find engineering roles, internships, and verified salary benchmarks
                   </h1>
                   <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                    Welcome back, <span className="font-semibold text-slate-900 dark:text-slate-100">{user ? user.name : 'Student Explorer'}</span>. Search verified roles across Python, GenAI/LLM, Java, Spring Boot, Go, Rust, React, Cloud/DevOps, Data Engineering &amp; Cybersecurity and manage your active application pipeline.
+                    Welcome back, <span className="font-semibold text-slate-900 dark:text-slate-100">{user ? user.name : 'Student Explorer'}</span>. Search <span className="font-mono font-semibold tabular-nums text-[#007AFF] dark:text-[#3898FF]">{jobs.length}</span> verified roles across iOS/Swift, Java, Spring Boot, React, Python, GenAI/LLM, Go, Rust, Cloud/DevOps &amp; MySQL.
                   </p>
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2.5 shrink-0">
                   <button
                     type="button"
+                    data-testid="overview-ai-assistant-btn"
                     onClick={() => setActiveTab('ai')}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#007AFF] hover:bg-[#0062CC] rounded-full shadow-xs cursor-pointer whitespace-nowrap"
                   >
-                    <Sparkles className="w-3.5 h-3.5 text-[#2557A7] dark:text-blue-400" />
-                    <span>Mock Interview &amp; Cheat Sheet</span>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>AI Assistant</span>
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="overview-profile-creation-btn"
+                    onClick={() => setActiveTab('profile')}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-[#F2F2F7] dark:bg-slate-800/90 hover:bg-slate-200/70 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 rounded-full cursor-pointer whitespace-nowrap"
+                  >
+                    <GraduationCap className="w-3.5 h-3.5 text-[#007AFF] dark:text-[#3898FF]" />
+                    <span>Profile &amp; Education</span>
                   </button>
                   <button
                     type="button"
                     data-testid="overview-resume-builder-btn"
                     onClick={() => setActiveTab('resume')}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 border border-slate-300 dark:border-slate-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap"
+                    className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-[#F2F2F7] dark:bg-slate-800/90 hover:bg-slate-200/70 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 rounded-full cursor-pointer whitespace-nowrap"
                   >
-                    <FileDown className="w-3.5 h-3.5 text-[#2557A7] dark:text-blue-400" />
-                    <span>Resume Builder &amp; PDF</span>
+                    <FileDown className="w-3.5 h-3.5 text-[#007AFF] dark:text-[#3898FF]" />
+                    <span>Resume Builder</span>
                   </button>
                 </div>
               </div>
 
-              {/* Authentic Two-Input Marketplace Search Bar (What + Where + Find Jobs) */}
+              {/* iOS Spotlight-style Search Bar (What + Where + Find Jobs) */}
               <form
                 onSubmit={handleHeroSearchSubmit}
                 data-testid="hero-search-form"
-                className="flex flex-col md:flex-row items-stretch rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 overflow-hidden focus-within:border-[#2557A7] focus-within:ring-1 focus-within:ring-[#2557A7]"
+                className="flex flex-col md:flex-row items-stretch rounded-2xl border border-slate-200/90 dark:border-slate-700/90 bg-[#F2F2F7]/70 dark:bg-slate-900/90 overflow-hidden focus-within:border-[#007AFF] focus-within:ring-2 focus-within:ring-[#007AFF]/20"
               >
-                <div className="flex-1 flex items-center gap-2.5 px-4 py-3 border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800">
+                <div className="flex-1 flex items-center gap-2.5 px-4 py-3.5 border-b md:border-b-0 md:border-r border-slate-200/80 dark:border-slate-800">
                   <span className="text-xs font-bold text-slate-700 dark:text-slate-300 shrink-0">
                     What
                   </span>
@@ -1054,7 +1069,7 @@ export default function App() {
                     type="text"
                     value={heroWhatQuery}
                     onChange={(e) => setHeroWhatQuery(e.target.value)}
-                    placeholder="Job title, skill (Python, GenAI, Java, Go, React, AWS), or company"
+                    placeholder="Job title, skill (Java, Spring Boot, React, Python, SQL), or company"
                     className="w-full text-sm bg-transparent text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none"
                   />
                 </div>
@@ -1089,18 +1104,18 @@ export default function App() {
                 <button
                   type="submit"
                   data-testid="hero-find-jobs-btn"
-                  className="px-6 py-3 text-sm font-bold text-white bg-[#2557A7] hover:bg-[#164081] dark:bg-blue-600 dark:hover:bg-blue-500 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                  className="px-7 py-3.5 text-sm font-bold text-white bg-[#007AFF] hover:bg-[#0062CC] dark:bg-[#0A84FF] dark:hover:bg-[#0070E0] cursor-pointer whitespace-nowrap shrink-0"
                 >
                   Find Jobs
                 </button>
               </form>
 
-              {/* Quick Tech Stack Filter Links */}
+              {/* Concise Popular Searches Row */}
               <div className="flex flex-wrap items-center gap-2 text-xs">
                 <span className="font-semibold text-slate-500 dark:text-slate-400">
-                  Popular searches:
+                  Popular stacks:
                 </span>
-                {coreStackFilters.slice(1).map((item) => (
+                {coreStackFilters.slice(1, 9).map((item) => (
                   <button
                     key={item.value}
                     type="button"
@@ -1109,7 +1124,7 @@ export default function App() {
                       setJobLocationFilter('ALL');
                       setActiveTab('jobs');
                     }}
-                    className="px-2.5 py-1 font-mono font-medium rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/70 text-slate-700 dark:text-slate-300 hover:border-[#2557A7] hover:text-[#2557A7] dark:hover:border-blue-400 dark:hover:text-blue-400 transition-colors cursor-pointer"
+                    className="px-3 py-1 font-mono font-medium rounded-full border border-slate-200/80 dark:border-slate-700 bg-[#F2F2F7] dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:border-[#007AFF] hover:text-[#007AFF] dark:hover:border-blue-400 dark:hover:text-blue-400 cursor-pointer"
                   >
                     {item.label}
                   </button>
@@ -1122,7 +1137,7 @@ export default function App() {
                   <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Target CTC
                   </div>
-                  <div className="text-lg font-bold font-mono tabular-nums text-[#087F31] dark:text-emerald-400 mt-0.5">
+                  <div className="text-lg font-bold font-mono tabular-nums text-[#1E8E3E] dark:text-emerald-400 mt-0.5">
                     ₹{settings.expectedSalaryMinLpa}–{settings.expectedSalaryMaxLpa} LPA
                   </div>
                 </div>
@@ -1130,7 +1145,7 @@ export default function App() {
                   <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                     Matched Roles
                   </div>
-                  <div className="text-lg font-bold font-mono tabular-nums text-[#2557A7] dark:text-blue-400 mt-0.5">
+                  <div className="text-lg font-bold font-mono tabular-nums text-[#007AFF] dark:text-[#3898FF] mt-0.5">
                     {careerStats.matchedJobsCount} Roles
                   </div>
                 </div>
@@ -1153,34 +1168,34 @@ export default function App() {
               </div>
             </section>
 
-            {/* 4 Core Platform Channel Tiles */}
+            {/* 4 Core Platform Channel Tiles (iOS Interactive Cards) */}
             <section aria-label="Platform Modules" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               {/* Module 1: Jobs */}
               <button
                 type="button"
                 onClick={() => setActiveTab('jobs')}
-                className="group text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[#2557A7] dark:hover:border-blue-500 rounded-xl p-5 cursor-pointer flex flex-col justify-between"
+                className="group text-left ios-card-interactive bg-white/95 dark:bg-[#151822]/95 border border-slate-200/80 dark:border-slate-800 hover:border-[#007AFF] dark:hover:border-blue-500 p-5 cursor-pointer flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <div className="w-9 h-9 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-[#2557A7] dark:text-blue-400 flex items-center justify-center">
-                      <Briefcase className="w-4 h-4" />
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-[#007AFF] dark:text-[#3898FF] flex items-center justify-center">
+                      <Briefcase className="w-4.5 h-4.5" />
                     </div>
-                    <span className="text-xs font-mono font-semibold text-[#2557A7] dark:text-blue-400 tabular-nums">
+                    <span className="text-xs font-mono font-semibold text-[#007AFF] dark:text-[#3898FF] tabular-nums">
                       {jobs.length} Roles
                     </span>
                   </div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#2557A7] dark:group-hover:text-blue-400 flex items-center justify-between">
+                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#007AFF] dark:group-hover:text-[#3898FF] flex items-center justify-between">
                     <span>Full-Time Jobs</span>
-                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#2557A7] dark:group-hover:text-blue-400" />
+                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#007AFF] dark:group-hover:text-[#3898FF]" />
                   </h2>
                   <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed">
-                    Software engineer roles across TCS, Infosys, Google India, Amazon &amp; Zoho with verified CTC ranges.
+                    Software engineer roles across Apple, Stripe, Google, Amazon, TCS, Infosys &amp; Zoho with verified CTC ranges.
                   </p>
                 </div>
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
                   <span className="font-mono text-slate-500 dark:text-slate-400">{appliedJobIds.length} applied</span>
-                  <span className="text-[#2557A7] dark:text-blue-400 font-semibold group-hover:underline">Browse roles</span>
+                  <span className="text-[#007AFF] dark:text-[#3898FF] font-semibold group-hover:underline">Browse roles</span>
                 </div>
               </button>
 
@@ -1188,20 +1203,20 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setActiveTab('internships')}
-                className="group text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[#087F31] dark:hover:border-emerald-500 rounded-xl p-5 cursor-pointer flex flex-col justify-between"
+                className="group text-left ios-card-interactive bg-white/95 dark:bg-[#151822]/95 border border-slate-200/80 dark:border-slate-800 hover:border-[#1E8E3E] dark:hover:border-emerald-500 p-5 cursor-pointer flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <div className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-[#087F31] dark:text-emerald-400 flex items-center justify-center">
-                      <GraduationCap className="w-4 h-4" />
+                    <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-[#1E8E3E] dark:text-emerald-400 flex items-center justify-center">
+                      <GraduationCap className="w-4.5 h-4.5" />
                     </div>
-                    <span className="text-xs font-mono font-semibold text-[#087F31] dark:text-emerald-400 tabular-nums">
+                    <span className="text-xs font-mono font-semibold text-[#1E8E3E] dark:text-emerald-400 tabular-nums">
                       {internships.length} Open
                     </span>
                   </div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#087F31] dark:group-hover:text-emerald-400 flex items-center justify-between">
+                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#1E8E3E] dark:group-hover:text-emerald-400 flex items-center justify-between">
                     <span>Internships</span>
-                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#087F31] dark:group-hover:text-emerald-400" />
+                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#1E8E3E] dark:group-hover:text-emerald-400" />
                   </h2>
                   <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed">
                     Summer &amp; winter student internships in GenAI/LLM, Go, Python Data, Full-Stack, Cloud &amp; QA with stipends.
@@ -1209,331 +1224,358 @@ export default function App() {
                 </div>
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
                   <span className="font-mono text-slate-500 dark:text-slate-400">{appliedInternshipIds.length} applied</span>
-                  <span className="text-[#087F31] dark:text-emerald-400 font-semibold group-hover:underline">Explore offers</span>
+                  <span className="text-[#1E8E3E] dark:text-emerald-400 font-semibold group-hover:underline">Explore offers</span>
                 </div>
               </button>
 
-              {/* Module 3: Learning Courses */}
+              {/* Module 3: Full-Stack Code Lab */}
+              <button
+                type="button"
+                onClick={() => setActiveTab('codelab')}
+                className="group text-left ios-card-interactive bg-white/95 dark:bg-[#151822]/95 border border-slate-200/80 dark:border-slate-800 hover:border-[#007AFF] dark:hover:border-blue-500 p-5 cursor-pointer flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center font-mono text-xs font-bold">
+                      {'</>'}
+                    </div>
+                    <span className="text-xs font-mono font-semibold text-slate-600 dark:text-slate-400">
+                      Java · Spring · SQL
+                    </span>
+                  </div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#007AFF] dark:group-hover:text-[#3898FF] flex items-center justify-between">
+                    <span>Full-Stack Code Lab</span>
+                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#007AFF] dark:group-hover:text-[#3898FF]" />
+                  </h2>
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed">
+                    Interactive MySQL 8.0 workbench, Java 17 + Spring Boot 3.5 generator with Bean Validation, and HTML/CSS/JS studio.
+                  </p>
+                </div>
+                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                  <span className="font-mono text-slate-500 dark:text-slate-400">Live workbench</span>
+                  <span className="text-[#007AFF] dark:text-[#3898FF] font-semibold group-hover:underline">Open Code Lab</span>
+                </div>
+              </button>
+
+              {/* Module 4: Learning & Certifications */}
               <button
                 type="button"
                 onClick={() => setActiveTab('learning')}
-                className="group text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[#2557A7] dark:hover:border-blue-500 rounded-xl p-5 cursor-pointer flex flex-col justify-between"
+                className="group text-left ios-card-interactive bg-white/95 dark:bg-[#151822]/95 border border-slate-200/80 dark:border-slate-800 hover:border-[#007AFF] dark:hover:border-blue-500 p-5 cursor-pointer flex flex-col justify-between"
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center">
-                      <BookOpen className="w-4 h-4" />
-                    </div>
-                    <span className="text-xs font-mono font-semibold text-slate-600 dark:text-slate-400 tabular-nums">
-                      {courses.length} Courses
-                    </span>
-                  </div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#2557A7] dark:group-hover:text-blue-400 flex items-center justify-between">
-                    <span>Learning Tracks</span>
-                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#2557A7] dark:group-hover:text-blue-400" />
-                  </h2>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed">
-                    Structured engineering tracks from Coursera, Udemy, Google, edX, and Microsoft Learn.
-                  </p>
-                </div>
-                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                  <span className="font-mono text-slate-500 dark:text-slate-400">{enrolledCourseIds.length} enrolled</span>
-                  <span className="text-[#2557A7] dark:text-blue-400 font-semibold group-hover:underline">Start learning</span>
-                </div>
-              </button>
-
-              {/* Module 4: Certifications */}
-              <button
-                type="button"
-                onClick={() => setActiveTab('certifications')}
-                className="group text-left bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[#2557A7] dark:hover:border-blue-500 rounded-xl p-5 cursor-pointer flex flex-col justify-between"
-              >
-                <div>
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="w-9 h-9 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 flex items-center justify-center">
-                      <Award className="w-4 h-4" />
+                    <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 flex items-center justify-center">
+                      <Award className="w-4.5 h-4.5" />
                     </div>
                     <span className="text-xs font-mono font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
-                      {certifications.length} Certs
+                      {courses.length} Courses · {certifications.length} Certs
                     </span>
                   </div>
-                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#2557A7] dark:group-hover:text-blue-400 flex items-center justify-between">
-                    <span>Certifications</span>
-                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#2557A7] dark:group-hover:text-blue-400" />
+                  <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 group-hover:text-[#007AFF] dark:group-hover:text-[#3898FF] flex items-center justify-between">
+                    <span>Learning &amp; Certs</span>
+                    <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#007AFF] dark:group-hover:text-[#3898FF]" />
                   </h2>
                   <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed">
-                    Industry credentials from AWS, Google Cloud, Oracle, Microsoft, CNCF Kubernetes, HashiCorp &amp; Databricks.
+                    Structured engineering courses and industry credentials from AWS, Oracle, Google Cloud, and Microsoft.
                   </p>
                 </div>
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                  <span className="font-mono text-slate-500 dark:text-slate-400">{savedCertIds.length} tracked</span>
-                  <span className="text-[#2557A7] dark:text-blue-400 font-semibold group-hover:underline">View credentials</span>
+                  <span className="font-mono text-slate-500 dark:text-slate-400">{enrolledCourseIds.length} enrolled · {savedCertIds.length} tracked</span>
+                  <span className="text-[#007AFF] dark:text-[#3898FF] font-semibold group-hover:underline">Start learning</span>
                 </div>
               </button>
             </section>
 
-            {/* Personalized Alerts: Skill-Driven Job & Internship Recommendations */}
-            <PersonalizedAlertsCard
-              userSkills={user?.skills || DEFAULT_USER_PROFILE.skills}
-              skillProficiencies={user?.skillProficiencies}
-              jobs={jobs}
-              internships={internships}
-              appliedJobIds={appliedJobIds}
-              appliedInternshipIds={appliedInternshipIds}
-              onApplyJob={handleToggleJobApply}
-              onApplyInternship={handleToggleInternshipApply}
-              onNavigateToJobs={(skillKeyword) => {
-                if (skillKeyword) {
-                  setJobSkillQuery(skillKeyword);
-                }
-                setActiveTab('jobs');
-              }}
-              onNavigateToInternships={(skillKeyword) => {
-                if (skillKeyword) {
-                  setInternQuery(skillKeyword);
-                }
-                setActiveTab('internships');
-              }}
-              onNavigateToProfile={() => setActiveTab('profile')}
-            />
-
-            {/* Recharts Skill Proficiency Radar Chart vs Saved Job Roles */}
-            <SkillProficiencyRadarCard
-              userSkills={user?.skills || DEFAULT_USER_PROFILE.skills}
-              jobs={jobs}
-              savedJobIds={appliedJobIds}
-              enrolledCourseIds={enrolledCourseIds}
-              savedCertIds={savedCertIds}
-              isDarkMode={settings.theme === 'dark'}
-              onNavigateToLearning={(skillKeyword) => {
-                if (skillKeyword) {
-                  setCourseQuery(skillKeyword);
-                }
-                setActiveTab('learning');
-              }}
-            />
-
-            {/* Career Timeline Component: Visualizes Job Application Stages & Status Updates */}
-            <CareerTimelineCard
-              jobs={jobs}
-              appliedJobIds={appliedJobIds}
-              stageRecords={applicationStageRecords}
-              onUpdateStage={handleUpdateApplicationStage}
-              onUpdateInterviewSchedule={handleUpdateInterviewSchedule}
-              onAddInterviewFeedback={handleAddInterviewFeedback}
-              onExploreJobs={() => setActiveTab('jobs')}
-            />
-
-            {/* Featured Matched Jobs Preview */}
-            <section className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">
-                    Top Roles Matching Your Profile Skills
-                  </h2>
-                  <p className="text-xs text-slate-600 dark:text-slate-400">
-                    Matched <span className="font-mono font-semibold tabular-nums text-[#2557A7] dark:text-blue-400">{careerStats.matchedJobsCount}</span> of <span className="font-mono tabular-nums">{jobs.length}</span> open roles · Profile stack: <span className="font-mono text-slate-700 dark:text-slate-300">{(user?.skills || DEFAULT_USER_PROFILE.skills).join(' · ')}</span>
-                  </p>
+            {/* Clean 2-Column Workspace: Left 8 Cols Top Matched Roles, Right 4 Cols Active Applications & Toolkit */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Left 8 Cols: Top Matched Roles */}
+              <section className="lg:col-span-8 space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                      Top Roles Matching Your Profile Skills
+                    </h2>
+                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                      Matched <span className="font-mono font-semibold tabular-nums text-[#2557A7] dark:text-blue-400">{careerStats.matchedJobsCount}</span> of <span className="font-mono tabular-nums">{jobs.length}</span> open roles · Stack: <span className="font-mono text-slate-700 dark:text-slate-300">{(user?.skills || DEFAULT_USER_PROFILE.skills).join(' · ')}</span>
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('jobs')}
+                    className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#2557A7] dark:text-blue-400 hover:underline cursor-pointer"
+                  >
+                    <span>View all {jobs.length} jobs</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setActiveTab('jobs')}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#2557A7] dark:text-blue-400 hover:underline cursor-pointer"
-                >
-                  <span>View all {jobs.length} jobs</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-              </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {jobs.slice(0, 6).map((job) => {
-                  const isApplied = appliedJobIds.includes(job.id);
-                  const isBookmarked = bookmarkedJobIds.includes(job.id);
-                  const badge = getCompanyMonogram(job.company);
-                  const skillsList = job.skills.split(',').map((s) => s.trim()).filter(Boolean);
-                  const linkedInUrl = buildLinkedInShareUrl({
-                    title: job.title,
-                    company: job.company,
-                    type: 'job',
-                    location: job.location,
-                    ctc: job.ctc,
-                    skills: job.skills
-                  });
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {jobs.slice(0, 4).map((job) => {
+                    const isApplied = appliedJobIds.includes(job.id);
+                    const isBookmarked = bookmarkedJobIds.includes(job.id);
+                    const badge = getCompanyMonogram(job.company);
+                    const skillsList = job.skills.split(',').map((s) => s.trim()).filter(Boolean);
+                    const linkedInUrl = buildLinkedInShareUrl({
+                      title: job.title,
+                      company: job.company,
+                      type: 'job',
+                      location: job.location,
+                      ctc: job.ctc,
+                      skills: job.skills
+                    });
 
-                  return (
-                    <article
-                      key={job.id}
-                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 hover:border-[#2557A7] dark:hover:border-blue-500 rounded-xl p-5 flex flex-col justify-between space-y-4"
-                    >
-                      <div className="space-y-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <div className={`w-9 h-9 rounded-lg border flex items-center justify-center font-bold text-xs shrink-0 ${badge.className}`}>
-                              {badge.initials}
-                            </div>
-                            <div className="min-w-0">
-                              <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block truncate">
-                                {job.company}
-                              </span>
-                              <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
-                                <MapPin className="w-3 h-3 shrink-0" />
-                                <span className="truncate">{job.location}</span>
+                    return (
+                      <article
+                        key={job.id}
+                        className="ios-card-interactive bg-white/95 dark:bg-[#151822]/95 border border-slate-200/80 dark:border-slate-800 hover:border-[#007AFF] dark:hover:border-blue-500 p-5 flex flex-col justify-between space-y-4"
+                      >
+                        <div className="space-y-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`w-10 h-10 rounded-xl border flex items-center justify-center font-bold text-xs shrink-0 ${badge.className}`}>
+                                {badge.initials}
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-xs font-bold text-slate-900 dark:text-slate-100 block truncate">
+                                  {job.company}
+                                </span>
+                                <div className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                                  <MapPin className="w-3 h-3 shrink-0" />
+                                  <span className="truncate">{job.location}</span>
+                                </div>
                               </div>
                             </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {job.ctc && (
+                                <span className="text-xs font-mono font-bold text-[#1E8E3E] dark:text-emerald-400 tabular-nums">
+                                  {job.ctc}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                data-testid={`overview-bookmark-btn-${job.id}`}
+                                onClick={() => handleToggleJobBookmark(job)}
+                                aria-pressed={isBookmarked}
+                                aria-label={
+                                  isBookmarked
+                                    ? `Remove ${job.title} at ${job.company} from Saved Jobs`
+                                    : `Save ${job.title} at ${job.company}`
+                                }
+                                title={isBookmarked ? 'Saved to Saved Jobs' : 'Save job for later'}
+                                className={`p-1.5 rounded-xl border cursor-pointer ${
+                                  isBookmarked
+                                    ? 'border-[#007AFF] bg-blue-50 text-[#007AFF] dark:border-blue-400 dark:bg-blue-950/60 dark:text-blue-400'
+                                    : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-[#007AFF] hover:text-[#007AFF] dark:hover:text-blue-400'
+                                }`}
+                              >
+                                <Bookmark
+                                  className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-current' : ''}`}
+                                />
+                              </button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            {job.ctc && (
-                              <span className="text-xs font-mono font-bold text-[#087F31] dark:text-emerald-400 tabular-nums">
-                                {job.ctc}
-                              </span>
-                            )}
+
+                          <div>
                             <button
                               type="button"
-                              data-testid={`overview-bookmark-btn-${job.id}`}
-                              onClick={() => handleToggleJobBookmark(job)}
-                              aria-pressed={isBookmarked}
-                              aria-label={
-                                isBookmarked
-                                  ? `Remove ${job.title} at ${job.company} from Saved Jobs`
-                                  : `Save ${job.title} at ${job.company}`
-                              }
-                              title={isBookmarked ? 'Saved to Saved Jobs' : 'Save job for later'}
-                              className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                                isBookmarked
-                                  ? 'border-[#2557A7] bg-blue-50 text-[#2557A7] dark:border-blue-400 dark:bg-blue-950/60 dark:text-blue-400'
-                                  : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-[#2557A7] hover:text-[#2557A7] dark:hover:text-blue-400'
-                              }`}
+                              onClick={() => {
+                                setSelectedJobId(job.id);
+                                setActiveTab('jobs');
+                              }}
+                              className="text-left text-base font-bold text-slate-900 dark:text-slate-100 hover:text-[#007AFF] dark:hover:text-[#3898FF] cursor-pointer"
                             >
-                              <Bookmark
-                                className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-current' : ''}`}
-                              />
+                              {job.title}
                             </button>
+                            <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
+                              {job.description}
+                            </p>
+                          </div>
+
+                          <div className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                            {skillsList.join(' · ')}
                           </div>
                         </div>
 
-                        <div>
+                        <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                          <a
+                            href={linkedInUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-[#007AFF] dark:hover:text-[#3898FF]"
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                            <span>Share on LinkedIn</span>
+                          </a>
                           <button
                             type="button"
-                            onClick={() => {
-                              setSelectedJobId(job.id);
-                              setActiveTab('jobs');
-                            }}
-                            className="text-left text-base font-bold text-slate-900 dark:text-slate-100 hover:text-[#2557A7] dark:hover:text-blue-400 cursor-pointer"
+                            onClick={() => handleToggleJobApply(job)}
+                            className={`px-4 py-1.5 text-xs font-semibold rounded-full cursor-pointer whitespace-nowrap shrink-0 ${
+                              isApplied
+                                ? 'bg-[#1E8E3E] text-white hover:bg-[#177332]'
+                                : 'bg-[#007AFF] text-white hover:bg-[#0062CC] dark:bg-[#0A84FF] dark:hover:bg-[#0070E0]'
+                            }`}
                           >
-                            {job.title}
+                            {isApplied ? 'Applied ✓' : 'Apply Now'}
                           </button>
-                          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-                            {job.description}
-                          </p>
                         </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
 
-                        <div className="text-xs font-mono text-slate-500 dark:text-slate-400">
-                          {skillsList.join(' · ')}
-                        </div>
-                      </div>
+              {/* Right 4 Cols: Compact Active Applications & Career Toolkit */}
+              <aside className="lg:col-span-4 space-y-4">
+                <div className="ios-card bg-white/95 dark:bg-[#151822]/95 border border-slate-200/80 dark:border-slate-800 p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                        Active Applications
+                      </h2>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        Track and update your current interview stages
+                      </p>
+                    </div>
+                    <span className="text-xs font-mono font-bold text-[#007AFF] dark:text-[#3898FF] tabular-nums">
+                      {appliedJobIds.length} Active
+                    </span>
+                  </div>
 
-                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                        <a
-                          href={linkedInUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-[#2557A7] dark:hover:text-blue-400"
-                        >
-                          <Share2 className="w-3.5 h-3.5" />
-                          <span>Share on LinkedIn</span>
-                        </a>
-                        <button
-                          type="button"
-                          onClick={() => handleToggleJobApply(job)}
-                          className={`px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-                            isApplied
-                              ? 'bg-[#087F31] text-white hover:bg-[#066828]'
-                              : 'bg-[#2557A7] text-white hover:bg-[#164081] dark:bg-blue-600 dark:hover:bg-blue-500'
-                          }`}
-                        >
-                          {isApplied ? 'Applied ✓' : 'Apply Now'}
-                        </button>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
-            </section>
+                  {appliedJobIds.length === 0 ? (
+                    <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 space-y-2">
+                      <p>No active job applications yet. Apply to any role to track its stage here.</p>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('jobs')}
+                        className="font-semibold text-[#007AFF] dark:text-[#3898FF] hover:underline cursor-pointer"
+                      >
+                        Explore open roles →
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {appliedJobIds.map((jobId) => {
+                        const job = jobs.find((j) => j.id === jobId);
+                        if (!job) return null;
+                        const record = applicationStageRecords[jobId];
+                        const currentStage: ApplicationStage = record?.currentStage || 'Applied';
+                        return (
+                          <div
+                            key={jobId}
+                            className="p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-[#F2F2F7]/70 dark:bg-slate-900/70 space-y-2.5"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                                  {job.title}
+                                </div>
+                                <div className="text-xs text-slate-500 dark:text-slate-400">
+                                  {job.company} · {job.location}
+                                </div>
+                              </div>
+                              {job.ctc && (
+                                <span className="text-xs font-mono font-semibold text-[#1E8E3E] dark:text-emerald-400 tabular-nums">
+                                  {job.ctc}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center justify-between gap-2 pt-1">
+                              <label
+                                htmlFor={`home-stage-select-${jobId}`}
+                                className="text-[11px] font-semibold text-slate-600 dark:text-slate-400"
+                              >
+                                Stage:
+                              </label>
+                              <select
+                                id={`home-stage-select-${jobId}`}
+                                value={currentStage}
+                                onChange={(e) =>
+                                  handleUpdateApplicationStage(
+                                    jobId,
+                                    e.target.value as ApplicationStage
+                                  )
+                                }
+                                className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#007AFF] cursor-pointer"
+                              >
+                                <option value="Applied">Applied</option>
+                                <option value="Interviewing">Interviewing</option>
+                                <option value="Offer Received">Offer Received</option>
+                                <option value="Rejected">Rejected</option>
+                              </select>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Quick Career Toolkit Links */}
+                  <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                    <div className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      Career Preparation Tools
+                    </div>
+                    <div className="grid grid-cols-1 gap-2">
+                      <button
+                        type="button"
+                        data-testid="overview-interview-prep-btn"
+                        onClick={() => navigateToTab('interview-prep')}
+                        className="w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-slate-200/80 dark:border-slate-800 bg-[#F2F2F7]/70 dark:bg-slate-800/60 text-slate-800 dark:text-slate-200 hover:border-[#007AFF] dark:hover:border-blue-400 cursor-pointer"
+                      >
+                        <span>Interview Notes &amp; Feedback Log</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('ai')}
+                        className="w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-slate-200/80 dark:border-slate-800 bg-[#F2F2F7]/70 dark:bg-slate-800/60 text-slate-800 dark:text-slate-200 hover:border-[#007AFF] dark:hover:border-blue-400 cursor-pointer"
+                      >
+                        <span>AI Mock Interview &amp; Career Assistant</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab('profile')}
+                        className="w-full flex items-center justify-between px-3.5 py-2.5 text-xs font-semibold rounded-xl border border-slate-200/80 dark:border-slate-800 bg-[#F2F2F7]/70 dark:bg-slate-800/60 text-slate-800 dark:text-slate-200 hover:border-[#007AFF] dark:hover:border-blue-400 cursor-pointer"
+                      >
+                        <span>Profile Skills &amp; Salary Preferences</span>
+                        <ArrowRight className="w-3.5 h-3.5 text-slate-400" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </aside>
+            </div>
           </div>
         )}
 
         {/* ==================== 2. JOBS EXPLORER VIEW (INDEED / GLASSDOOR MASTER-DETAIL SPLIT) ==================== */}
         {activeTab === 'jobs' && (
-          <div className="space-y-6">
+          <div className="space-y-6 ios-page-enter">
             {/* Search & Filter Toolbar */}
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="ios-card bg-white/95 dark:bg-[#151822]/95 border border-slate-200/80 dark:border-slate-800 p-5 space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
                     Explore Engineering Jobs
                   </h1>
                   <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                    Showing <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-slate-100">{sortedJobs.length}</span> of <span className="font-mono tabular-nums">{jobs.length}</span> open roles · Click any listing to inspect compensation &amp; skill match
+                    Showing <span className="font-mono font-semibold tabular-nums text-[#007AFF] dark:text-[#3898FF]">{sortedJobs.length}</span> of <span className="font-mono tabular-nums">{jobs.length}</span> open roles · Click any listing to inspect compensation &amp; skill match
                   </p>
                 </div>
 
-                {/* Search Input, Sort Selector & Saved/Alerts Toggles */}
-                <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-                  <div className="relative flex-1 min-w-[200px] sm:w-72">
-                    <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                    <label htmlFor="job-skill-search" className="sr-only">
-                      Search jobs by skill, title, or company
-                    </label>
-                    <input
-                      id="job-skill-search"
-                      type="text"
-                      value={jobSkillQuery}
-                      onChange={(e) => setJobSkillQuery(e.target.value)}
-                      placeholder="Job title, skill (Python, GenAI, Go, Java, AWS, SQL), or company..."
-                      className="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#2557A7]"
-                    />
-                  </div>
-
-                  <div>
-                    <label htmlFor="job-sort-select" className="sr-only">
-                      Sort jobs by
-                    </label>
-                    <select
-                      id="job-sort-select"
-                      data-testid="jobs-sort-select"
-                      aria-label="Sort jobs by"
-                      value={jobSortBy}
-                      onChange={(e) => {
-                        const nextSort = e.target.value as JobSortOption;
-                        setJobSortBy(nextSort);
-                        const nextList = sortJobsList(filteredJobs, {
-                          sortBy: nextSort,
-                          userSkills: user?.skills || DEFAULT_USER_PROFILE.skills,
-                          expectedMinLpa: settings.expectedSalaryMinLpa,
-                          expectedMaxLpa: settings.expectedSalaryMaxLpa
-                        });
-                        if (nextList.length > 0) {
-                          setSelectedJobId(nextList[0].id);
-                        }
-                      }}
-                      className="px-3 py-2 text-xs font-semibold rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#2557A7] cursor-pointer"
-                    >
-                      <option value="featured">Sort: Featured</option>
-                      <option value="match-desc">Sort: Best Skill Match</option>
-                      <option value="ctc-desc">Sort: Highest Salary (LPA)</option>
-                      <option value="ctc-asc">Sort: Entry Salary (Low-High)</option>
-                    </select>
-                  </div>
-
+                {/* Saved Jobs & UserAlerts Quick Toggles */}
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
                   <button
                     type="button"
                     data-testid="jobs-saved-filter-toggle"
                     aria-pressed={showSavedJobsOnly}
                     onClick={() => setShowSavedJobsOnly((prev) => !prev)}
-                    className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                       showSavedJobsOnly
-                        ? 'bg-[#2557A7] text-white border-[#2557A7] dark:bg-blue-600 dark:border-blue-600'
-                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-[#2557A7] hover:text-[#2557A7] dark:hover:text-blue-400'
+                        ? 'bg-[#007AFF] text-white border-[#007AFF] dark:bg-[#0A84FF] dark:border-[#0A84FF]'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-[#007AFF] hover:text-[#007AFF] dark:hover:text-blue-400'
                     }`}
                   >
                     <Bookmark
@@ -1557,10 +1599,10 @@ export default function App() {
                     data-testid="jobs-alerts-toggle"
                     aria-pressed={isAlertsPanelOpen}
                     onClick={() => setIsAlertsPanelOpen((prev) => !prev)}
-                    className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-lg border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                    className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold rounded-xl border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                       isAlertsPanelOpen
                         ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
-                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-[#2557A7] hover:text-[#2557A7] dark:hover:text-blue-400'
+                        : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-300 dark:border-slate-700 hover:border-[#007AFF] hover:text-[#007AFF] dark:hover:text-blue-400'
                     }`}
                   >
                     <Bell className="w-3.5 h-3.5" />
@@ -1587,7 +1629,7 @@ export default function App() {
                         setShowSavedJobsOnly(false);
                         setJobSortBy('featured');
                       }}
-                      className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg cursor-pointer whitespace-nowrap"
+                      className="px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl cursor-pointer whitespace-nowrap"
                     >
                       Reset Filters
                     </button>
@@ -1595,44 +1637,95 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Stack & Location Filter Rows */}
-              <div className="space-y-2.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+              {/* Search Input, Location Filter & Sort Selector */}
+              <div className="flex flex-col md:flex-row md:items-center gap-2.5">
+                <div className="relative flex-1 min-w-0">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <label htmlFor="job-skill-search" className="sr-only">
+                    Search jobs by skill, title, or company
+                  </label>
+                  <input
+                    id="job-skill-search"
+                    type="text"
+                    value={jobSkillQuery}
+                    onChange={(e) => setJobSkillQuery(e.target.value)}
+                    placeholder="Job title, skill (Python, GenAI, Go, Java, AWS, SQL), or company..."
+                    className="w-full pl-9 pr-4 py-2 text-sm bg-slate-50 dark:bg-slate-950 border border-slate-300 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#007AFF]"
+                  />
+                </div>
+
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0">
+                  <div>
+                    <label htmlFor="job-location-select" className="sr-only">
+                      Filter jobs by location
+                    </label>
+                    <select
+                      id="job-location-select"
+                      data-testid="jobs-location-select"
+                      aria-label="Filter jobs by location"
+                      value={jobLocationFilter}
+                      onChange={(e) => setJobLocationFilter(e.target.value)}
+                      className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#007AFF] cursor-pointer"
+                    >
+                      {jobLocations.map((loc) => (
+                        <option key={loc} value={loc}>
+                          {loc === 'ALL' ? 'Location: All India' : `Location: ${loc}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="job-sort-select" className="sr-only">
+                      Sort jobs by
+                    </label>
+                    <select
+                      id="job-sort-select"
+                      data-testid="jobs-sort-select"
+                      aria-label="Sort jobs by"
+                      value={jobSortBy}
+                      onChange={(e) => {
+                        const nextSort = e.target.value as JobSortOption;
+                        setJobSortBy(nextSort);
+                        const nextList = sortJobsList(filteredJobs, {
+                          sortBy: nextSort,
+                          userSkills: user?.skills || DEFAULT_USER_PROFILE.skills,
+                          expectedMinLpa: settings.expectedSalaryMinLpa,
+                          expectedMaxLpa: settings.expectedSalaryMaxLpa
+                        });
+                        if (nextList.length > 0) {
+                          setSelectedJobId(nextList[0].id);
+                        }
+                      }}
+                      className="px-3 py-2 text-xs font-semibold rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-[#007AFF] cursor-pointer"
+                    >
+                      <option value="featured">Sort: Featured</option>
+                      <option value="match-desc">Sort: Best Skill Match</option>
+                      <option value="ctc-desc">Sort: Highest Salary (LPA)</option>
+                      <option value="ctc-asc">Sort: Entry Salary (Low-High)</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Single Clean Row of Core Stack Filters (iOS Pill Segmented Style) */}
+              <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
                 <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter jobs by core tech stack">
                   <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 mr-1">
                     Tech Stack:
                   </span>
-                  {coreStackFilters.map((stack) => (
+                  {coreStackFilters.slice(0, 11).map((stack) => (
                     <button
                       key={stack.label}
                       type="button"
                       onClick={() => setJobSkillQuery(stack.value)}
-                      className={`px-3 py-1.5 text-xs font-mono font-medium rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                      className={`px-3 py-1.5 text-xs font-mono font-medium rounded-full cursor-pointer whitespace-nowrap shrink-0 ${
                         jobSkillQuery.toLowerCase() === stack.value
-                          ? 'bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900'
-                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                          ? 'bg-[#007AFF] text-white shadow-xs'
+                          : 'bg-[#F2F2F7] dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200/80 dark:hover:bg-slate-700'
                       }`}
                     >
                       {stack.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5" role="group" aria-label="Filter jobs by location">
-                  <span className="text-xs font-semibold text-slate-500 dark:text-slate-400 mr-1 shrink-0">
-                    Location:
-                  </span>
-                  {jobLocations.map((loc) => (
-                    <button
-                      key={loc}
-                      type="button"
-                      onClick={() => setJobLocationFilter(loc)}
-                      className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
-                        jobLocationFilter === loc
-                          ? 'bg-[#2557A7] text-white dark:bg-blue-600'
-                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:border-[#2557A7] hover:text-[#2557A7]'
-                      }`}
-                    >
-                      {loc === 'ALL' ? 'All Locations' : loc}
                     </button>
                   ))}
                 </div>
@@ -1691,9 +1784,9 @@ export default function App() {
             ) : (
               /* Master-Detail Split Layout */
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                {/* Left Column: Job Feed List */}
+                {/* Left Column: Scrollable Job Feed List */}
                 <div
-                  className="lg:col-span-5 space-y-3"
+                  className="lg:col-span-5 space-y-3 lg:max-h-[calc(100vh-14rem)] lg:overflow-y-auto lg:pr-1"
                   role="list"
                   aria-label="Job listings feed"
                 >
@@ -1715,10 +1808,10 @@ export default function App() {
                         key={job.id}
                         role="listitem"
                         data-testid={`job-list-card-${job.id}`}
-                        className={`relative bg-white dark:bg-slate-900 rounded-xl border p-4 ${
+                        className={`relative ios-card-interactive bg-white/95 dark:bg-[#151822]/95 border p-4 ${
                           isSelected
-                            ? 'border-[#2557A7] ring-1 ring-[#2557A7] dark:border-blue-500 dark:ring-blue-500'
-                            : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                            ? 'border-[#007AFF] ring-1 ring-[#007AFF] dark:border-[#3898FF] dark:ring-[#3898FF]'
+                            : 'border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                         }`}
                       >
                         <button
@@ -1732,10 +1825,10 @@ export default function App() {
                               : `Save ${job.title} at ${job.company}`
                           }
                           title={isBookmarked ? 'Saved to Saved Jobs' : 'Save job for later'}
-                          className={`absolute top-3.5 right-3.5 z-10 p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                          className={`absolute top-3.5 right-3.5 z-10 p-1.5 rounded-xl border cursor-pointer ${
                             isBookmarked
-                              ? 'border-[#2557A7] bg-blue-50 text-[#2557A7] dark:border-blue-400 dark:bg-blue-950/60 dark:text-blue-400'
-                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-[#2557A7] hover:text-[#2557A7] dark:hover:text-blue-400'
+                              ? 'border-[#007AFF] bg-blue-50 text-[#007AFF] dark:border-blue-400 dark:bg-blue-950/60 dark:text-blue-400'
+                              : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-500 dark:text-slate-400 hover:border-[#007AFF] hover:text-[#007AFF] dark:hover:text-blue-400'
                           }`}
                         >
                           <Bookmark
@@ -1747,11 +1840,11 @@ export default function App() {
                           type="button"
                           onClick={() => setSelectedJobId(job.id)}
                           aria-pressed={isSelected}
-                          className="w-full text-left space-y-2.5 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#2557A7] rounded"
+                          className="w-full text-left space-y-2.5 cursor-pointer focus-visible:outline-2 focus-visible:outline-[#007AFF] rounded-xl"
                         >
                           <div className="flex items-start justify-between gap-2 pr-10">
                             <div className="flex items-center gap-2.5 min-w-0">
-                              <div className={`w-9 h-9 rounded-lg border flex items-center justify-center font-bold text-xs shrink-0 ${badge.className}`}>
+                              <div className={`w-9 h-9 rounded-xl border flex items-center justify-center font-bold text-xs shrink-0 ${badge.className}`}>
                                 {badge.initials}
                               </div>
                               <div className="min-w-0">
@@ -1766,7 +1859,7 @@ export default function App() {
                             </div>
 
                             {isApplied && (
-                              <span className="text-xs font-semibold text-[#087F31] dark:text-emerald-400 shrink-0 whitespace-nowrap">
+                              <span className="text-xs font-semibold text-[#1E8E3E] dark:text-emerald-400 shrink-0 whitespace-nowrap">
                                 Applied ✓
                               </span>
                             )}
@@ -1778,7 +1871,7 @@ export default function App() {
                             </h2>
                             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs mt-1">
                               {job.ctc && (
-                                <span className="font-mono font-bold text-[#087F31] dark:text-emerald-400 tabular-nums">
+                                <span className="font-mono font-bold text-[#1E8E3E] dark:text-emerald-400 tabular-nums">
                                   {job.ctc}
                                 </span>
                               )}
@@ -1787,7 +1880,7 @@ export default function App() {
                                 {job.type || 'Full-Time'}
                               </span>
                               <span className="text-slate-400" aria-hidden="true">·</span>
-                              <span className="font-mono font-semibold text-[#2557A7] dark:text-blue-400 tabular-nums">
+                              <span className="font-mono font-semibold text-[#007AFF] dark:text-[#3898FF] tabular-nums">
                                 {breakdown.matchPercent}% match
                               </span>
                             </div>
@@ -1811,7 +1904,7 @@ export default function App() {
                   <aside
                     data-testid="job-detail-pane"
                     aria-label={`Job details for ${activeSelectedJob.title} at ${activeSelectedJob.company}`}
-                    className="lg:col-span-7 lg:sticky lg:top-20 lg:z-20 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-visible"
+                    className="lg:col-span-7 lg:sticky lg:top-20 lg:z-20 ios-card bg-white/95 dark:bg-[#151822]/95 border border-slate-200/80 dark:border-slate-800 overflow-visible"
                   >
                     {/* Sticky Header inside Detail Pane */}
                     <div className="p-6 border-b border-slate-200 dark:border-slate-800 space-y-4">
@@ -1894,7 +1987,7 @@ export default function App() {
                         const shareLinks = buildJobShareLinks(sharePayload);
 
                         return (
-                          <div className="flex flex-wrap items-center gap-2.5 pt-1">
+                          <div className="flex flex-wrap items-center gap-2 pt-1">
                             <button
                               type="button"
                               data-testid="job-detail-apply-btn"
@@ -1904,10 +1997,10 @@ export default function App() {
                                   ? `Withdraw application for ${activeSelectedJob.title} at ${activeSelectedJob.company}`
                                   : `Apply Now for ${activeSelectedJob.title} at ${activeSelectedJob.company}`
                               }
-                              className={`px-5 py-2.5 text-sm font-bold rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                              className={`px-4 py-2 text-xs font-bold rounded-xl transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                                 appliedJobIds.includes(activeSelectedJob.id)
                                   ? 'bg-[#087F31] text-white hover:bg-[#066828]'
-                                  : 'bg-[#2557A7] text-white hover:bg-[#164081] dark:bg-blue-600 dark:hover:bg-blue-500'
+                                  : 'bg-[#007AFF] text-white hover:bg-[#0062CC]'
                               }`}
                             >
                               {appliedJobIds.includes(activeSelectedJob.id) ? 'Applied ✓' : 'Apply Now'}
@@ -1923,10 +2016,10 @@ export default function App() {
                                   : `Save ${activeSelectedJob.title} at ${activeSelectedJob.company}`
                               }
                               onClick={() => handleToggleJobBookmark(activeSelectedJob)}
-                              className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                              className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                                 bookmarkedJobIds.includes(activeSelectedJob.id)
-                                  ? 'border-[#2557A7] bg-blue-50 text-[#2557A7] dark:border-blue-400 dark:bg-blue-950/60 dark:text-blue-300'
-                                  : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-[#2557A7] hover:text-[#2557A7] dark:hover:text-blue-400'
+                                  ? 'border-[#007AFF] bg-blue-50 text-[#007AFF] dark:border-blue-400 dark:bg-blue-950/60 dark:text-blue-300'
+                                  : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-[#007AFF] hover:text-[#007AFF] dark:hover:text-blue-400'
                               }`}
                             >
                               <Bookmark
@@ -1957,7 +2050,7 @@ export default function App() {
                                       : `Get notified for new jobs with skills like ${activeSelectedJob.skills}`
                                   }
                                   onClick={() => handleToggleGetNotified(activeSelectedJob)}
-                                  className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                                  className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                                     isAlerted
                                       ? 'border-[#087F31] bg-emerald-50 text-[#087F31] dark:border-emerald-500 dark:bg-emerald-950/50 dark:text-emerald-300'
                                       : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-[#2557A7] hover:text-[#2557A7] dark:hover:text-blue-400'
@@ -1983,10 +2076,10 @@ export default function App() {
                               href={shareLinks.linkedinUrl}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:border-[#2557A7] hover:text-[#2557A7] dark:hover:text-blue-400 border border-slate-300 dark:border-slate-700 rounded-lg transition-colors whitespace-nowrap shrink-0"
+                              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 bg-white dark:bg-slate-800 hover:border-[#007AFF] hover:text-[#007AFF] dark:hover:text-blue-400 border border-slate-300 dark:border-slate-700 rounded-xl transition-colors whitespace-nowrap shrink-0"
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
-                              <span>Share on LinkedIn</span>
+                              <span>LinkedIn</span>
                             </a>
 
                             <button
@@ -1995,12 +2088,12 @@ export default function App() {
                               onClick={() =>
                                 handleCopyLinkedInPost(`job-${activeSelectedJob.id}`, sharePayload)
                               }
-                              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors cursor-pointer whitespace-nowrap shrink-0"
+                              className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700 rounded-xl transition-colors cursor-pointer whitespace-nowrap shrink-0"
                             >
                               {copiedShareKey === `job-${activeSelectedJob.id}` ? (
                                 <>
                                   <Check className="w-3.5 h-3.5 text-[#087F31] dark:text-emerald-400" />
-                                  <span>Copied Post</span>
+                                  <span>Copied</span>
                                 </>
                               ) : (
                                 <>
@@ -2033,12 +2126,12 @@ export default function App() {
                                       }
                                       setIsShareMenuOpen((prev) => !prev);
                                     }}
-                                    className={`inline-flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-semibold rounded-lg border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                                    className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                                       copyLinkFeedback.isCopied
                                         ? 'border-emerald-300 dark:border-emerald-700 bg-emerald-50 dark:bg-emerald-950/60 text-[#087F31] dark:text-emerald-300'
                                         : isShareMenuOpen
-                                        ? 'border-[#2557A7] bg-blue-50 text-[#2557A7] dark:border-blue-400 dark:bg-blue-950/60 dark:text-blue-300'
-                                        : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-[#2557A7] hover:text-[#2557A7] dark:hover:text-blue-400'
+                                        ? 'border-[#007AFF] bg-blue-50 text-[#007AFF] dark:border-blue-400 dark:bg-blue-950/60 dark:text-blue-300'
+                                        : 'border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:border-[#007AFF] hover:text-[#007AFF] dark:hover:text-blue-400'
                                     }`}
                                   >
                                     {copyLinkFeedback.isCopied ? (
@@ -2389,15 +2482,6 @@ export default function App() {
                 onNotify={showToast}
               />
             )}
-
-            {/* Recharts Salary Comparison Bar Chart (Saved Jobs Avg CTC vs Expected Salary Range) */}
-            <JobSalaryComparisonCard
-              jobs={jobs}
-              savedJobIds={appliedJobIds}
-              settings={settings}
-              onUpdateSettings={handleUpdateSettings}
-              onNavigateToSettings={() => setActiveTab('profile')}
-            />
           </div>
         )}
 
@@ -2579,13 +2663,32 @@ export default function App() {
           <div className="space-y-6">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                    Learn and Grow Your Skills
-                  </h1>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                    Showing <span className="font-mono font-semibold tabular-nums">{filteredCourses.length}</span> of <span className="font-mono tabular-nums">{courses.length}</span> structured engineering courses
-                  </p>
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('learning')}
+                      className="px-3 py-1.5 text-xs font-bold rounded-md bg-white dark:bg-slate-900 text-[#2557A7] dark:text-blue-400 shadow-xs cursor-pointer"
+                    >
+                      Courses ({courses.length})
+                    </button>
+                    <button
+                      type="button"
+                      data-testid="switch-to-certifications-btn"
+                      onClick={() => setActiveTab('certifications')}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                    >
+                      Certifications ({certifications.length})
+                    </button>
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                      Learn and Grow Your Skills
+                    </h1>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                      Showing <span className="font-mono font-semibold tabular-nums">{filteredCourses.length}</span> of <span className="font-mono tabular-nums">{courses.length}</span> structured engineering courses
+                    </p>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 w-full md:w-96">
@@ -2708,13 +2811,32 @@ export default function App() {
           <div className="space-y-6">
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 space-y-4">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                  <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                    Achieve Industry Certifications
-                  </h1>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                    Showing <span className="font-mono font-semibold tabular-nums">{filteredCertifications.length}</span> of <span className="font-mono tabular-nums">{certifications.length}</span> verified credentials
-                  </p>
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                    <button
+                      type="button"
+                      data-testid="switch-to-courses-btn"
+                      onClick={() => setActiveTab('learning')}
+                      className="px-3 py-1.5 text-xs font-semibold rounded-md text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white cursor-pointer"
+                    >
+                      Courses ({courses.length})
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab('certifications')}
+                      className="px-3 py-1.5 text-xs font-bold rounded-md bg-white dark:bg-slate-900 text-[#2557A7] dark:text-blue-400 shadow-xs cursor-pointer"
+                    >
+                      Certifications ({certifications.length})
+                    </button>
+                  </div>
+                  <div>
+                    <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+                      Achieve Industry Certifications
+                    </h1>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                      Showing <span className="font-mono font-semibold tabular-nums">{filteredCertifications.length}</span> of <span className="font-mono tabular-nums">{certifications.length}</span> verified credentials
+                    </p>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 w-full md:w-96">
@@ -2815,6 +2937,19 @@ export default function App() {
           </div>
         )}
 
+        {/* ==================== 5.8 INTERVIEW PREP & D3 CONFIDENCE ANALYTICS VIEW ==================== */}
+        {activeTab === 'interview-prep' && (
+          <InterviewPrepView
+            jobs={jobs}
+            appliedJobIds={appliedJobIds}
+            stageRecords={applicationStageRecords}
+            isDarkMode={settings.theme === 'dark'}
+            onAddInterviewFeedback={handleAddInterviewFeedback}
+            onOpenMockInterview={() => navigateToTab('ai')}
+            onExploreJobs={() => navigateToTab('jobs')}
+          />
+        )}
+
         {/* ==================== 6. AI CAREER ASSISTANT VIEW ==================== */}
         {activeTab === 'ai' && (
           <CareerAssistantView
@@ -2900,6 +3035,20 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Compact Floating iOS AI Career & Profile Assistant Orb */}
+      {activeTab !== 'ai' && (
+        <button
+          type="button"
+          data-testid="floating-ai-assistant-btn"
+          aria-label="Open AI Career & Profile Assistant"
+          onClick={() => navigateToTab('ai')}
+          className="no-print fixed bottom-5 right-5 z-40 w-11 h-11 rounded-full bg-[#007AFF] hover:bg-[#0062CC] text-white flex items-center justify-center shadow-lg border border-white/25 cursor-pointer transition-all hover:scale-105"
+          title="Open AI Career & Profile Assistant"
+        >
+          <Sparkles className="w-5 h-5" />
+        </button>
+      )}
 
       <footer className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 py-5 px-6 mt-12">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 dark:text-slate-400">

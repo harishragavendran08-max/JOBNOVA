@@ -5,26 +5,72 @@
   :root {
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', monospace;
-    --brand-primary: #2557a7;
-    --brand-primary-hover: #164081;
-    --brand-emerald: #087f31;
-    --canvas-light: #f5f6f8;
+    --brand-primary: #007aff;
+    --brand-primary-hover: #0062cc;
+    --brand-emerald: #1e8e3e;
+    --canvas-light: #f2f2f7;
+    --ios-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   body {
     font-family: var(--font-sans);
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
-    transition: background-color 180ms ease, color 180ms ease;
+    background-color: #f2f2f7;
+    transition: background-color 200ms var(--ios-spring), color 200ms var(--ios-spring);
+  }
+
+  .dark body {
+    background-color: #090d16;
+  }
+
+  button,
+  a,
+  select,
+  input,
+  textarea {
+    transition:
+      transform 160ms var(--ios-spring),
+      background-color 160ms var(--ios-spring),
+      border-color 160ms var(--ios-spring),
+      color 160ms var(--ios-spring),
+      box-shadow 160ms var(--ios-spring),
+      opacity 160ms var(--ios-spring);
+  }
+
+  button:active:not(:disabled) {
+    transform: scale(0.98);
   }
 
   @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+
     body,
-    .theme-transition-surface {
+    button,
+    a,
+    select,
+    input,
+    textarea,
+    .theme-transition-surface,
+    .ios-card,
+    .ios-card-interactive {
       transition: none !important;
     }
 
+    button:active:not(:disabled) {
+      transform: none !important;
+    }
+
     .animate-share-check-pop,
-    .animate-share-confirm-pulse {
+    .animate-share-confirm-pulse,
+    .ios-page-enter {
       animation: none !important;
     }
   }
@@ -33,6 +79,17 @@
   .tabular-nums {
     font-family: var(--font-mono);
     font-variant-numeric: tabular-nums;
+  }
+}
+
+@keyframes iosPageEnter {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.996);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -61,6 +118,50 @@
 }
 
 @layer utilities {
+  .ios-page-enter {
+    animation: iosPageEnter 200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .ios-glass-bar {
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+  }
+
+  .ios-card {
+    border-radius: 1.25rem;
+    box-shadow: 0 2px 14px -3px rgba(15, 23, 42, 0.05), 0 1px 3px 0 rgba(15, 23, 42, 0.03);
+    transition:
+      transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 200ms cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+      background-color 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .ios-card-interactive {
+    border-radius: 1.25rem;
+    box-shadow: 0 2px 14px -3px rgba(15, 23, 42, 0.05), 0 1px 3px 0 rgba(15, 23, 42, 0.03);
+    transition:
+      transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 200ms cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 180ms cubic-bezier(0.16, 1, 0.3, 1),
+      background-color 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .ios-card-interactive:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px -6px rgba(0, 122, 255, 0.10), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
+  }
+
+  .ios-segmented {
+    background-color: rgba(118, 118, 128, 0.12);
+    border-radius: 0.875rem;
+    padding: 0.25rem;
+  }
+
+  .dark .ios-segmented {
+    background-color: rgba(118, 118, 128, 0.24);
+  }
+
   .animate-share-check-pop {
     animation: shareCheckPop 260ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
@@ -69,27 +170,28 @@
     animation: shareConfirmPulse 450ms ease-out forwards;
   }
 
+  /* Crisp iOS-style hairline borders */
   .border-slate-100 {
-    border-color: #cbd5e1;
+    border-color: #e5e7eb;
   }
   .border-slate-200 {
-    border-color: #b8c4d4;
+    border-color: #d8dce3;
   }
   .border-slate-300 {
-    border-color: #94a3b8;
+    border-color: #c2c8d4;
   }
   .divide-slate-200 > :not(:last-child) {
-    border-color: #b8c4d4;
+    border-color: #d8dce3;
   }
 
   .dark\:border-slate-800:where(.dark, .dark *) {
-    border-color: #334155;
+    border-color: #262936;
   }
   .dark\:border-slate-700:where(.dark, .dark *) {
-    border-color: #475569;
+    border-color: #35394a;
   }
   .dark\:divide-slate-800:where(.dark, .dark *) > :not(:last-child) {
-    border-color: #334155;
+    border-color: #262936;
   }
 }
 
@@ -114,3 +216,4 @@
     transform: none !important;
   }
 }
+

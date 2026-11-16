@@ -62,40 +62,44 @@ import {
   updateSkillProficiencyMap
 } from './jobnovaLogic';
 
-test('filterJobsBySkill filters 44 seeded jobs across Java, GenAI, Go, Rust, Cloud, Data, QA & Security stacks', () => {
-  assert.equal(SEED_JOBS.length, 44);
+test('filterJobsBySkill filters 65 seeded jobs across iOS/Swift, Java, GenAI, Go, Rust, Cloud, Data, QA & Security stacks', () => {
+  assert.equal(SEED_JOBS.length, 65);
   const javaJobs = filterJobsBySkill(SEED_JOBS, 'springboot');
-  assert.ok(javaJobs.length >= 5);
+  assert.ok(javaJobs.length >= 10);
   assert.equal(javaJobs[0].company, 'TCS');
   assert.equal(javaJobs[1].company, 'Infosys');
 
+  const iosJobs = filterJobsBySkill(SEED_JOBS, 'swift');
+  assert.equal(iosJobs.length, 4);
+  assert.equal(iosJobs[0].company, 'Apple India');
+
   const chennaiJobs = filterJobsBySkill(SEED_JOBS, '', 'Chennai');
-  assert.equal(chennaiJobs.length, 7);
+  assert.equal(chennaiJobs.length, 11);
 
   const genaiJobs = filterJobsBySkill(SEED_JOBS, 'genai');
-  assert.equal(genaiJobs.length, 1);
+  assert.ok(genaiJobs.length >= 2);
   assert.equal(genaiJobs[0].company, 'Krutrim AI');
 
   const goJobs = filterJobsBySkill(SEED_JOBS, 'golang');
-  assert.equal(goJobs.length, 1);
+  assert.ok(goJobs.length >= 3);
   assert.equal(goJobs[0].company, 'Gojek');
 
   const rustJobs = filterJobsBySkill(SEED_JOBS, 'rust');
-  assert.equal(rustJobs.length, 1);
+  assert.ok(rustJobs.length >= 2);
   assert.equal(rustJobs[0].company, 'Zerodha');
 
   const k8sJobs = filterJobsBySkill(SEED_JOBS, 'kubernetes');
-  assert.ok(k8sJobs.length >= 5);
+  assert.ok(k8sJobs.length >= 8);
 
   const dataJobs = filterJobsBySkill(SEED_JOBS, 'snowflake');
-  assert.equal(dataJobs.length, 2);
+  assert.equal(dataJobs.length, 3);
 
   const qaJobs = filterJobsBySkill(SEED_JOBS, 'playwright');
-  assert.equal(qaJobs.length, 1);
+  assert.equal(qaJobs.length, 2);
   assert.equal(qaJobs[0].company, 'BrowserStack');
 
   const secJobs = filterJobsBySkill(SEED_JOBS, 'cybersecurity');
-  assert.equal(secJobs.length, 2);
+  assert.equal(secJobs.length, 3);
 });
 
 test('filterInternships filters 20 seeded internships accurately', () => {

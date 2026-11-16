@@ -548,12 +548,12 @@ async function startServer() {
     if (ai) {
       try {
         const geminiPromise = ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: 'gemini-4-hydrogen',
           contents: prompt,
           config: {
             thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
             systemInstruction:
-              'You are the JobNova Career Assistant for university students and freshers in India. Give practical, structured, concise advice (using 4-5 bullet points) on resumes, software engineering interviews, LinkedIn profiles, Java/Spring Boot, Python/AI, soft skills, internships, and certifications available on JobNova.'
+              'You are the JobNova AI Career & Profile Assistant for university students and software engineers in India. Give practical, structured, concise advice (using 4-5 bullet points) on profile creation, writing About/Bio summaries, formatting Education & CGPA sections, ATS resume optimization, software engineering interviews, Java/Spring Boot, React, internships, and certifications available on JobNova.'
           }
         });
         const timeoutPromise = new Promise<null>((resolve) =>
@@ -627,7 +627,7 @@ Provide an objective engineering evaluation. Return ONLY a valid JSON object mat
 }`;
 
         const geminiPromise = ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: 'gemini-4-hydrogen',
           contents: interviewPrompt,
           config: {
             thinkingConfig: { thinkingLevel: ThinkingLevel.LOW },
